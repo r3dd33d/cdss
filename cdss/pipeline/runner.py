@@ -72,7 +72,8 @@ class Runner:
         state = PipelineState(run_id=run_id, raw_input=raw_input, input_is_pdf=is_pdf)
 
         try:
-            final_state: PipelineState = await graph.ainvoke(state)
+            result = await graph.ainvoke(state)
+            final_state = PipelineState.model_validate(result)
             from cdss.llm.prompts.synthesizer import DISCLAIMER
             from cdss.core.models.patient import PatientProfile
             report = FinalReport(
