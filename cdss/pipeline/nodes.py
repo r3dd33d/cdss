@@ -3,6 +3,8 @@ from cdss.agents.intake.intake_agent import IntakeTask
 from cdss.agents.research.aggregator_agent import AggregatorTask
 from cdss.agents.research.coordinator_agent import CoordinatorTask
 from cdss.agents.synthesis.report_agent import SynthesizerTask
+from cdss.agents.cross_indication.coordinator_agent import CrossIndicationTask
+from cdss.agents.trials.trials_agent import TrialsTask
 from cdss.core.enums import AgentType
 from cdss.pipeline.state import PipelineState
 
@@ -36,6 +38,21 @@ async def node_research(state: PipelineState, *, factory) -> dict:
         AgentType.RESEARCH_AGGREGATOR, agg_task, parent_run_id=state.run_id
     )
     return dict(source_summaries=summaries, standard_care_summary=agg_result.data)
+
+
+async def node_trials(state: PipelineState, *, factory) -> dict:
+    task = TrialsTask(profile=state._profile())
+    result = await factory.spawn(AgentType.TRIALS, task, parent_run_id=state.run_id)
+    return dict(clinical_trials=result.data)
+
+
+async def node_cross_indication(state: PipelineState, *, factory) -> dict:
+    task = CrossIndicationTask(profile=state._profile())
+    result = await factory.spawn(
+        AgentType.CROSS_INDICATION_COORD, task, parent_run_id=state.run_id
+    )
+    flags = list(state.validation_flags) + result.validation_flags
+    return dict(off_label_hypotheses=result.data, validation_flags=flags)
 
 
 async def node_synthesize(state: PipelineState, *, factory) -> dict:

@@ -8,6 +8,8 @@ from cdss.agents.research.aggregator_agent import ResearchAggregatorAgent
 from cdss.agents.research.coordinator_agent import ResearchCoordinatorAgent
 from cdss.agents.research.source_reader_agent import SourceReaderAgent
 from cdss.agents.synthesis.report_agent import ReportSynthesizerAgent
+from cdss.agents.cross_indication.coordinator_agent import CrossIndicationCoordinator
+from cdss.agents.trials.trials_agent import TrialsAgent
 from cdss.config.settings import Settings
 from cdss.core.enums import AgentType, EventType
 from cdss.core.models.report import FinalReport
@@ -46,10 +48,13 @@ class Runner:
             fetcher=self._fetcher,
             search=self._search,
             source_registry=self._src_registry,
+            settings=self._settings,
         )
         reg.register(AgentType.INTAKE, IntakeAgent)
         reg.register(AgentType.SOURCE_READER, SourceReaderAgent)
         reg.register(AgentType.RESEARCH_AGGREGATOR, ResearchAggregatorAgent)
+        reg.register(AgentType.TRIALS, TrialsAgent)
+        reg.register(AgentType.CROSS_INDICATION_COORD, CrossIndicationCoordinator)
         reg.register(AgentType.REPORT_SYNTHESIZER, ReportSynthesizerAgent)
         factory = AgentFactory(reg, self.bus, **deps)
 

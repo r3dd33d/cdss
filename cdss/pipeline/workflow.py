@@ -3,7 +3,9 @@ import functools
 
 from langgraph.graph import StateGraph, END
 
-from cdss.pipeline.nodes import node_intake, node_research, node_synthesize
+from cdss.pipeline.nodes import (
+    node_cross_indication, node_intake, node_research, node_synthesize, node_trials,
+)
 from cdss.pipeline.state import PipelineState
 
 
@@ -18,16 +20,22 @@ def build_graph(factory) -> StateGraph:
     """Build and compile the LangGraph pipeline, injecting the factory."""
     _intake = functools.partial(node_intake, factory=factory)
     _research = functools.partial(node_research, factory=factory)
+    _trials = functools.partial(node_trials, factory=factory)
+    _cross = functools.partial(node_cross_indication, factory=factory)
     _synthesize = functools.partial(node_synthesize, factory=factory)
 
     g = StateGraph(PipelineState)
     g.add_node("intake", _intake)
     g.add_node("research", _research)
+    g.add_node("trials", _trials)
+    g.add_node("cross_indication", _cross)
     g.add_node("synthesize", _synthesize)
 
     g.set_entry_point("intake")
     g.add_edge("intake", "research")
-    g.add_edge("research", "synthesize")
+    g.add_edge("research", "trials")
+    g.add_edge("trials", "cross_indication")
+    g.add_edge("cross_indication", "synthesize")
     g.add_conditional_edges(
         "synthesize",
         _should_retry,

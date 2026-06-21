@@ -100,7 +100,7 @@ source, and the disclaimer.
 - [x] T043 [P] [US1] `app/components/chat.py` — `st.chat_input` + `st.chat_message` history render.
 - [x] T044 [P] [US1] `app/components/report_view.py` — `st.tabs(Profile|Standard Care|Trials|Off-Label)` + `st.write_stream`/`st.markdown`; disclaimer caption.
 - [x] T045 [US1] `app/main.py` — page config, layout, disclaimer, chat input → `runner_bridge.start_run` → render report (non-blocking).
-- [ ] T046 [P] [US1] `tests/app/unit/test_chat_flow.py` — `st.testing.AppTest` with a **stubbed runner_bridge** (canned report): disclaimer present, report tabs populated. No live agents.
+- [x] T046 [P] [US1] `tests/app/unit/test_chat_flow.py` — `st.testing.AppTest` with a **stubbed runner_bridge** (canned report): disclaimer present, report tabs populated. No live agents.
 
 **Checkpoint**: MVP works — a chat message yields a cited, disclaimed report.
 
@@ -115,10 +115,10 @@ updating live as the run executes.
 stream; assert a parent→child spawn tree + a failed node + a terminal run-completed event,
 and that `agent_trace` renders it (incl. the failed node).
 
-- [ ] T047 [US2] `app/components/agent_trace.py` — build parent→child tree from events; render with `st.status` (running→"running", completed→"complete", failed→"error"); show label + duration.
-- [ ] T048 [US2] `app/main.py` — add the right-column trace panel and an `@st.fragment(run_every="0.7s")` that drains `runner_bridge` events into `session_state` and `st.rerun()` on `done()` (research.md R7).
-- [ ] T049 [P] [US2] `tests/app/unit/test_agent_trace.py` — `AppTest` renders the tree from a fixture event list including a failed node.
-- [ ] T050 [US2] `tests/core/integration/test_event_stream.py` — failing source → spawn tree + isolated failure + single terminal run-completed in the event bus (SC-003).
+- [x] T047 [US2] `app/components/agent_trace.py` — build parent→child tree from events; render with `st.status` (running→"running", completed→"complete", failed→"error"); show label + duration.
+- [x] T048 [US2] `app/main.py` — add the right-column trace panel and an `@st.fragment(run_every="0.7s")` that drains `runner_bridge` events into `session_state` and `st.rerun()` on `done()` (research.md R7).
+- [x] T049 [P] [US2] `tests/app/unit/test_agent_trace.py` — `AppTest` renders the tree from a fixture event list including a failed node.
+- [x] T050 [US2] `tests/core/integration/test_event_stream.py` — failing source → spawn tree + isolated failure + single terminal run-completed in the event bus (SC-003).
 
 **Checkpoint**: P1 MVP complete — report + live trace. Demoable product.
 
@@ -130,10 +130,10 @@ and that `agent_trace` renders it (incl. the failed node).
 
 **Independent Test**: Parsed profile + mocked CT.gov response → report trials section + count.
 
-- [ ] T051 [P] [US3] `cdss/integrations/clinical_trials.py` — CT.gov v2 query builder + response → `list[ClinicalTrial]` (notebook Cell 22); unreachable → empty + failure event.
-- [ ] T052 [P] [US3] `tests/core/unit/integrations/test_clinical_trials.py` — mapping + error degradation.
-- [ ] T053 [US3] `cdss/agents/trials/trials_agent.py` (profile → trials) + register; add `trials` node to `workflow.py` after research.
-- [ ] T054 [US3] Wire Trials tab in `report_view.py`; integration assert `trials_count` + valid NCT links.
+- [x] T051 [P] [US3] `cdss/integrations/clinical_trials.py` — CT.gov v2 query builder + response → `list[ClinicalTrial]` (notebook Cell 22); unreachable → empty + failure event.
+- [x] T052 [P] [US3] `tests/core/unit/integrations/test_clinical_trials.py` — mapping + error degradation.
+- [x] T053 [US3] `cdss/agents/trials/trials_agent.py` (profile → trials) + register; add `trials` node to `workflow.py` after research.
+- [x] T054 [US3] Wire Trials tab in `report_view.py`; integration assert `trials_count` + valid NCT links.
 
 **Checkpoint**: Report includes trials; degrades gracefully if CT.gov is down.
 
@@ -146,12 +146,12 @@ and that `agent_trace` renders it (incl. the failed node).
 **Independent Test**: Stub KG with a known path → labeled hypotheses; KG unavailable → phase
 skipped, run still completes (SC-007).
 
-- [ ] T055 [P] [US4] `cdss/knowledge/graph/loader.py` — PrimeKG (Harvard Dataverse) → NetworkX, cached, lazy, `KG_AVAILABLE` flag (notebook Cell 14).
-- [ ] T056 [P] [US4] `cdss/knowledge/graph/queries.py` — `find_node_by_name`, `find_drugs_for_gene` BFS (notebook Cell 16).
-- [ ] T057 [P] [US4] `tests/core/unit/knowledge/test_queries.py` — traversal on a stub graph; empty when unavailable.
-- [ ] T058 [US4] `cdss/agents/cross_indication/{coordinator_agent,kg_traversal_agent}.py` (+ optional `hypothesis_agent.py`); register; add conditional `cross_indication` node (skipped when `KG_AVAILABLE` false).
-- [ ] T059 [US4] `tests/core/integration/test_cross_indication.py` — hypotheses with KG; phase skipped + skip event without KG; run still completes.
-- [ ] T060 [P] [US4] Wire Off-Label tab in `report_view.py` (labeled hypotheses, evidence level).
+- [x] T055 [P] [US4] `cdss/knowledge/graph/loader.py` — PrimeKG (Harvard Dataverse) → NetworkX, cached, lazy, `KG_AVAILABLE` flag (notebook Cell 14).
+- [x] T056 [P] [US4] `cdss/knowledge/graph/queries.py` — `find_node_by_name`, `find_drugs_for_gene` BFS (notebook Cell 16).
+- [x] T057 [P] [US4] `tests/core/unit/knowledge/test_queries.py` — traversal on a stub graph; empty when unavailable.
+- [x] T058 [US4] `cdss/agents/cross_indication/{coordinator_agent,kg_traversal_agent}.py` (+ optional `hypothesis_agent.py`); register; add conditional `cross_indication` node (skipped when `KG_AVAILABLE` false).
+- [x] T059 [US4] `tests/core/integration/test_cross_indication.py` — hypotheses with KG; phase skipped + skip event without KG; run still completes.
+- [x] T060 [P] [US4] Wire Off-Label tab in `report_view.py` (labeled hypotheses, evidence level).
 
 **Checkpoint**: All four report sections present; pipeline robust to missing KG.
 
@@ -164,9 +164,9 @@ skipped, run still completes (SC-007).
 **Independent Test**: Upload a fixture PDF → profile reflects document; unreadable PDF →
 clear error surfaced in chat.
 
-- [ ] T061 [US5] `app/components/chat.py` — enable `st.chat_input(accept_file=True, file_type=["pdf"])`; pass PDF bytes to `runner_bridge` (no parsing in the UI).
-- [ ] T062 [US5] `app/runner_bridge.py` + `cdss/pipeline/runner.py` — route PDF bytes → `cdss/sources/extract/pdf.py` → intake; surface a validation error for unreadable/empty PDF (FR-014).
-- [ ] T063 [US5] `tests/core/integration/test_pdf_intake.py` (fixture PDF → profile; bad PDF → error) + `tests/app/unit/test_pdf_upload.py` (AppTest: error message shown).
+- [x] T061 [US5] `app/components/chat.py` — enable `st.chat_input(accept_file=True, file_type=["pdf"])`; pass PDF bytes to `runner_bridge` (no parsing in the UI).
+- [x] T062 [US5] `app/runner_bridge.py` + `cdss/pipeline/runner.py` — route PDF bytes → `cdss/sources/extract/pdf.py` → intake; surface a validation error for unreadable/empty PDF (FR-014).
+- [x] T063 [US5] `tests/core/integration/test_pdf_intake.py` (fixture PDF → profile; bad PDF → error) + `tests/app/unit/test_pdf_upload.py` (AppTest: error message shown).
 
 **Checkpoint**: Both free-text and PDF intake paths work through the same pipeline.
 
@@ -174,15 +174,15 @@ clear error surfaced in chat.
 
 ## Phase 8: Polish & Hardening
 
-- [ ] T064 [P] [POLISH] `app/main.py` — `@st.cache_resource` to build the runner (Groq `LLMClient`, `AgentFactory`, KG loader) once per session; add a **"New case"** button that resets session state.
-- [ ] T065 [P] [POLISH] `app/components/suggestions.py` (suggestion chips with example prompts before first message) + `app/components/feedback.py` (`st.feedback("thumbs")` on the report).
-- [ ] T066 [P] [POLISH] Source-fetch caching within a run; structured logging with PII redaction (Principle V).
-- [ ] T067 [P] [POLISH] `tests/core/integration/test_full_pipeline.py` — full 5-phase run with partial source failures → completed run with all available sections.
-- [ ] T068 [P] [POLISH] Wire CI gates in Makefile/CI: file-size, import-direction (`cdss/` no `streamlit`), comment-length, disclaimer-present assertion (SC-002, SC-004, SC-006, Principles II/VII).
-- [ ] T069 [P] [POLISH] Docs: `README.md` quickstart (`streamlit run app/main.py`) + `docs/AGENTS.md` (agent catalog). (`ARCHITECTURE.md` already realigned to the Streamlit-only design.)
-- [ ] T070 [P] [POLISH] `tests/app/unit/test_input_validation.py` — assert empty / over-length chat text raises a chat error and starts **no** run (US1 AS3, FR-014, gap L1).
-- [ ] T071 [P] [POLISH] `tests/core/integration/test_config_swap.py` — toggling a site in `sources.yaml` and reordering `model_preference` changes behavior with **no code edits** (SC-005).
-- [ ] T072 [P] [POLISH] Perf smoke check (`tests/core/integration/test_latency.py`, opt-in marker): a fully-mocked end-to-end run completes well under the SC-001 budget; document the ~60 s real-tier target in `README.md`.
+- [x] T064 [P] [POLISH] `app/main.py` — `@st.cache_resource` to build the runner (Groq `LLMClient`, `AgentFactory`, KG loader) once per session; add a **"New case"** button that resets session state.
+- [x] T065 [P] [POLISH] `app/components/suggestions.py` (suggestion chips with example prompts before first message) + `app/components/feedback.py` (`st.feedback("thumbs")` on the report).
+- [x] T066 [P] [POLISH] Source-fetch caching within a run; structured logging with PII redaction (Principle V).
+- [x] T067 [P] [POLISH] `tests/core/integration/test_full_pipeline.py` — full 5-phase run with partial source failures → completed run with all available sections.
+- [x] T068 [P] [POLISH] Wire CI gates in Makefile/CI: file-size, import-direction (`cdss/` no `streamlit`), comment-length, disclaimer-present assertion (SC-002, SC-004, SC-006, Principles II/VII).
+- [x] T069 [P] [POLISH] Docs: `README.md` quickstart (`streamlit run app/main.py`) + `docs/AGENTS.md` (agent catalog). (`ARCHITECTURE.md` already realigned to the Streamlit-only design.)
+- [x] T070 [P] [POLISH] `tests/app/unit/test_input_validation.py` — assert empty / over-length chat text raises a chat error and starts **no** run (US1 AS3, FR-014, gap L1).
+- [x] T071 [P] [POLISH] `tests/core/integration/test_config_swap.py` — toggling a site in `sources.yaml` and reordering `model_preference` changes behavior with **no code edits** (SC-005).
+- [x] T072 [P] [POLISH] Perf smoke check (`tests/core/integration/test_latency.py`, opt-in marker): a fully-mocked end-to-end run completes well under the SC-001 budget; document the ~60 s real-tier target in `README.md`.
 
 ---
 
