@@ -1,0 +1,17 @@
+services:
+  app:
+    build: .
+    ports: ["8501:8501"]
+    env_file: .env
+    volumes:
+      - primekg_cache:/tmp/primekg
+
+  qdrant:  # optional — comment out if not using PDF vector search
+    image: qdrant/qdrant:latest
+    ports: ["6333:6333"]
+    volumes:
+      - qdrant_data:/qdrant/storage
+
+volumes:
+  primekg_cache:
+  qdrant_data:

@@ -21,11 +21,11 @@ only). Tests: `tests/core/…`, `tests/app/…`.
 
 ## Phase 1: Setup (Shared Infrastructure)
 
-- [ ] T001 [SETUP] Create single-app skeleton: `cdss/` core tree (config, core, observability, llm, sources, knowledge, integrations, agents, pipeline) and `app/` (state, components) and `tests/{core,app}/`, with `__init__.py` where needed and an `app/main.py` placeholder.
-- [ ] T002 [P] [SETUP] `pyproject.toml` + `requirements.txt`: streamlit, langgraph, pydantic, pydantic-settings, openai (Groq-compatible), httpx, trafilatura/readability, pypdf, networkx, pyyaml; optional qdrant-client + sentence-transformers. **No fastapi/uvicorn/sse-starlette.**
-- [ ] T003 [P] [SETUP] `.env.example` (GROQ_API_KEY, SERPER_API_KEY, cache dirs), `.gitignore` (ignore `.env`), `README.md`, `Makefile` (`run: streamlit run app/main.py`; `test`; `lint`; `guards`).
-- [ ] T004 [P] [SETUP] Tooling + three CI gate scripts: (a) **file-size** ≤400 lines over `cdss/**` and `app/**` (Principle I); (b) **import-direction guard** — fail if any `cdss/**/*.py` imports `streamlit` (Principle II); (c) **comment-length gate** — fail on any comment >2 sentences (Principle VII). Plus ruff + black, pytest + pytest-asyncio config.
-- [ ] T005 [P] [SETUP] `Dockerfile` (single Streamlit image, entry `streamlit run app/main.py`) + `docker-compose.yml` (streamlit + optional qdrant).
+- [x] T001 [SETUP] Create single-app skeleton: `cdss/` core tree (config, core, observability, llm, sources, knowledge, integrations, agents, pipeline) and `app/` (state, components) and `tests/{core,app}/`, with `__init__.py` where needed and an `app/main.py` placeholder.
+- [x] T002 [P] [SETUP] `pyproject.toml` + `requirements.txt`: streamlit, langgraph, pydantic, pydantic-settings, openai (Groq-compatible), httpx, trafilatura/readability, pypdf, networkx, pyyaml; optional qdrant-client + sentence-transformers. **No fastapi/uvicorn/sse-starlette.**
+- [x] T003 [P] [SETUP] `.env.example` (GROQ_API_KEY, SERPER_API_KEY, cache dirs), `.gitignore` (ignore `.env`), `README.md`, `Makefile` (`run: streamlit run app/main.py`; `test`; `lint`; `guards`).
+- [x] T004 [P] [SETUP] Tooling + three CI gate scripts: (a) **file-size** ≤400 lines over `cdss/**` and `app/**` (Principle I); (b) **import-direction guard** — fail if any `cdss/**/*.py` imports `streamlit` (Principle II); (c) **comment-length gate** — fail on any comment >2 sentences (Principle VII). Plus ruff + black, pytest + pytest-asyncio config.
+- [x] T005 [P] [SETUP] `Dockerfile` (single Streamlit image, entry `streamlit run app/main.py`) + `docker-compose.yml` (streamlit + optional qdrant).
 
 **Checkpoint**: App installs; `cdss/` and `app/` import cleanly; guard scripts run.
 
@@ -37,24 +37,24 @@ only). Tests: `tests/core/…`, `tests/app/…`.
 infrastructure to "lay correctly": domain core, config, observability event bus, LLM
 client, and the AgentFactory.
 
-- [ ] T006 [P] [FOUND] `cdss/core/enums.py` — `AgentType`, `RunStatus`, `EventType` (data-model.md).
-- [ ] T007 [P] [FOUND] `cdss/core/exceptions.py` — FetchError, ExtractError, LLMError, IntakeError.
-- [ ] T008 [P] [FOUND] `cdss/core/models/{patient,source,trial,hypothesis,report}.py` — one small Pydantic module per entity.
-- [ ] T009 [P] [FOUND] `tests/core/unit/core/test_models.py` — validation/serialization per entity.
-- [ ] T010 [FOUND] `cdss/config/settings.py` (pydantic-settings: keys, cache dirs, log level) + `cdss/config/sources.yaml` (sites allowlist, search, fetch, llm model_preference + token budgets).
-- [ ] T011 [P] [FOUND] `cdss/sources/registry.py` — load + validate `sources.yaml` into typed config.
-- [ ] T012 [FOUND] `cdss/observability/events.py` — `AgentEvent` base + typed subclasses + PII-redaction helper.
-- [ ] T013 [FOUND] `cdss/observability/run_context.py` (run_id/parent/depth) + `cdss/observability/trace_store.py` (append-only per-run log).
-- [ ] T014 [FOUND] `cdss/observability/event_bus.py` — per-`run_id` pub/sub; **thread-safe drain** so the UI thread can pull events produced by the background run thread (research.md R4/R7).
-- [ ] T015 [P] [FOUND] `tests/core/unit/observability/test_event_bus.py` — publish/drain, ordering, replay, redaction, cross-thread safety.
-- [ ] T016 [P] [FOUND] `cdss/llm/json_utils.py` (`strip_json_fences`) + `cdss/llm/model_selector.py` (runtime Groq model discovery by preference order — notebook Cell 8).
-- [ ] T017 [FOUND] `cdss/llm/client.py` — narrow `LLMClient.chat(prompt, max_tokens)` over Groq OpenAI-compatible endpoint; no hard-coded model (Principle III).
-- [ ] T018 [P] [FOUND] `tests/core/unit/llm/test_model_selector.py` — preference order + fallback with mocked model list.
-- [ ] T019 [FOUND] `cdss/agents/base.py` — `BaseAgent` ABC + `AgentTask`/`AgentResult` bases (contracts/agents.md).
-- [ ] T020 [FOUND] `cdss/agents/registry.py` — `AgentType → class` map (empty wiring slots).
-- [ ] T021 [FOUND] `cdss/agents/factory.py` — `AgentFactory.spawn()` (run_id gen, event emission, registry instantiation, completed/failed). Sole spawn path.
-- [ ] T022 [FOUND] `tests/core/unit/agents/test_factory.py` — spawn emits spawned/started/completed; failure → agent_failed; parent/child tree correct.
-- [ ] T023 [FOUND] `cdss/pipeline/state.py` — `PipelineState` (data-model.md) incl. retry_count/max_retries.
+- [x] T006 [P] [FOUND] `cdss/core/enums.py` — `AgentType`, `RunStatus`, `EventType` (data-model.md).
+- [x] T007 [P] [FOUND] `cdss/core/exceptions.py` — FetchError, ExtractError, LLMError, IntakeError.
+- [x] T008 [P] [FOUND] `cdss/core/models/{patient,source,trial,hypothesis,report}.py` — one small Pydantic module per entity.
+- [x] T009 [P] [FOUND] `tests/core/unit/core/test_models.py` — validation/serialization per entity.
+- [x] T010 [FOUND] `cdss/config/settings.py` (pydantic-settings: keys, cache dirs, log level) + `cdss/config/sources.yaml` (sites allowlist, search, fetch, llm model_preference + token budgets).
+- [x] T011 [P] [FOUND] `cdss/sources/registry.py` — load + validate `sources.yaml` into typed config.
+- [x] T012 [FOUND] `cdss/observability/events.py` — `AgentEvent` base + typed subclasses + PII-redaction helper.
+- [x] T013 [FOUND] `cdss/observability/run_context.py` (run_id/parent/depth) + `cdss/observability/trace_store.py` (append-only per-run log).
+- [x] T014 [FOUND] `cdss/observability/event_bus.py` — per-`run_id` pub/sub; **thread-safe drain** so the UI thread can pull events produced by the background run thread (research.md R4/R7).
+- [x] T015 [P] [FOUND] `tests/core/unit/observability/test_event_bus.py` — publish/drain, ordering, replay, redaction, cross-thread safety.
+- [x] T016 [P] [FOUND] `cdss/llm/json_utils.py` (`strip_json_fences`) + `cdss/llm/model_selector.py` (runtime Groq model discovery by preference order — notebook Cell 8).
+- [x] T017 [FOUND] `cdss/llm/client.py` — narrow `LLMClient.chat(prompt, max_tokens)` over Groq OpenAI-compatible endpoint; no hard-coded model (Principle III).
+- [x] T018 [P] [FOUND] `tests/core/unit/llm/test_model_selector.py` — preference order + fallback with mocked model list.
+- [x] T019 [FOUND] `cdss/agents/base.py` — `BaseAgent` ABC + `AgentTask`/`AgentResult` bases (contracts/agents.md).
+- [x] T020 [FOUND] `cdss/agents/registry.py` — `AgentType → class` map (empty wiring slots).
+- [x] T021 [FOUND] `cdss/agents/factory.py` — `AgentFactory.spawn()` (run_id gen, event emission, registry instantiation, completed/failed). Sole spawn path.
+- [x] T022 [FOUND] `tests/core/unit/agents/test_factory.py` — spawn emits spawned/started/completed; failure → agent_failed; parent/child tree correct.
+- [x] T023 [FOUND] `cdss/pipeline/state.py` — `PipelineState` (data-model.md) incl. retry_count/max_retries.
 
 **Checkpoint**: Factory + event bus + LLM client + core models exist and are tested.
 Stories can now build on this foundation.
@@ -72,34 +72,34 @@ and verify the report has parsed condition/stage, a standard-care summary, ≥1 
 source, and the disclaimer.
 
 ### Core adapters & infra (cdss/)
-- [ ] T024 [P] [US1] `cdss/sources/search/base.py` (`AbstractSearchProvider`) + `serper.py` + `site_scoped.py` (allowlist `site:` queries).
-- [ ] T025 [P] [US1] `cdss/sources/fetch/base.py` (`AbstractFetcher`) + `httpx_fetcher.py` (timeout from config).
-- [ ] T026 [P] [US1] `cdss/sources/extract/html.py` (trafilatura/readability) + `extract/pdf.py` (pypdf).
-- [ ] T027 [P] [US1] `tests/core/unit/sources/` — site-scoped query building, fetch timeout, HTML/PDF extraction (fixtures, mocked HTTP).
+- [x] T024 [P] [US1] `cdss/sources/search/base.py` (`AbstractSearchProvider`) + `serper.py` + `site_scoped.py` (allowlist `site:` queries).
+- [x] T025 [P] [US1] `cdss/sources/fetch/base.py` (`AbstractFetcher`) + `httpx_fetcher.py` (timeout from config).
+- [x] T026 [P] [US1] `cdss/sources/extract/html.py` (trafilatura/readability) + `extract/pdf.py` (pypdf).
+- [x] T027 [P] [US1] `tests/core/unit/sources/` — site-scoped query building, fetch timeout, HTML/PDF extraction (fixtures, mocked HTTP).
 
 ### Agents (each its own module + test)
-- [ ] T028 [P] [US1] `cdss/llm/prompts/intake.py` + `cdss/agents/intake/intake_agent.py` (notebook Agent 1 → `PatientProfile`; never invents fields).
-- [ ] T029 [US1] `tests/core/unit/agents/test_intake.py` — parses condition/stage/biomarkers (mocked LLM); vague input → empty profile.
-- [ ] T030 [P] [US1] `cdss/llm/prompts/source_reader.py` + `cdss/agents/research/source_reader_agent.py` (1 url → `SourceSummary`; ignores injected instructions, FR-015).
-- [ ] T031 [US1] `tests/core/unit/agents/test_source_reader.py` — fetch→extract→summarize; timeout → isolated failure event.
-- [ ] T032 [US1] `cdss/agents/research/coordinator_agent.py` — search → spawn N `SOURCE_READER` via factory in parallel (≤ max_total_sources, semaphore) → then aggregator.
-- [ ] T033 [P] [US1] `cdss/agents/research/aggregator_agent.py` — merge summaries → `standard_care_summary`.
-- [ ] T034 [P] [US1] `cdss/llm/prompts/synthesizer.py` + `cdss/agents/synthesis/report_agent.py` (notebook Agent 5 → `FinalReport`; **MUST embed disclaimer**, FR-007).
-- [ ] T035 [US1] `tests/core/unit/agents/test_synthesizer.py` — report includes disclaimer + sources (gate SC-002).
-- [ ] T036 [US1] Register US1 agents in `cdss/agents/registry.py`.
+- [x] T028 [P] [US1] `cdss/llm/prompts/intake.py` + `cdss/agents/intake/intake_agent.py` (notebook Agent 1 → `PatientProfile`; never invents fields).
+- [x] T029 [US1] `tests/core/unit/agents/test_intake.py` — parses condition/stage/biomarkers (mocked LLM); vague input → empty profile.
+- [x] T030 [P] [US1] `cdss/llm/prompts/source_reader.py` + `cdss/agents/research/source_reader_agent.py` (1 url → `SourceSummary`; ignores injected instructions, FR-015).
+- [x] T031 [US1] `tests/core/unit/agents/test_source_reader.py` — fetch→extract→summarize; timeout → isolated failure event.
+- [x] T032 [US1] `cdss/agents/research/coordinator_agent.py` — search → spawn N `SOURCE_READER` via factory in parallel (≤ max_total_sources, semaphore) → then aggregator.
+- [x] T033 [P] [US1] `cdss/agents/research/aggregator_agent.py` — merge summaries → `standard_care_summary`.
+- [x] T034 [P] [US1] `cdss/llm/prompts/synthesizer.py` + `cdss/agents/synthesis/report_agent.py` (notebook Agent 5 → `FinalReport`; **MUST embed disclaimer**, FR-007).
+- [x] T035 [US1] `tests/core/unit/agents/test_synthesizer.py` — report includes disclaimer + sources (gate SC-002).
+- [x] T036 [US1] Register US1 agents in `cdss/agents/registry.py`.
 
 ### Core pipeline + runner
-- [ ] T037 [US1] `cdss/pipeline/nodes.py` (thin wrappers calling agents via factory) + `cdss/pipeline/workflow.py` (LangGraph: intake→research→synthesize MVP slice).
-- [ ] T038 [US1] `cdss/pipeline/runner.py` — `build_runner()` + async `run(state)` driving the workflow + event bus, applying the retry rule (max 2, FR-011), returning `FinalReport` and exposing an optional report token stream.
-- [ ] T039 [US1] `tests/core/integration/test_pipeline_mvp.py` — full MVP run (mocked search/fetch/LLM) asserts report shape + disclaimer + ≥1 source.
+- [x] T037 [US1] `cdss/pipeline/nodes.py` (thin wrappers calling agents via factory) + `cdss/pipeline/workflow.py` (LangGraph: intake→research→synthesize MVP slice).
+- [x] T038 [US1] `cdss/pipeline/runner.py` — `build_runner()` + async `run(state)` driving the workflow + event bus, applying the retry rule (max 2, FR-011), returning `FinalReport` and exposing an optional report token stream.
+- [x] T039 [US1] `tests/core/integration/test_pipeline_mvp.py` — full MVP run (mocked search/fetch/LLM) asserts report shape + disclaimer + ≥1 source.
 
 ### Chat UI (app/) — calls core only via runner_bridge
-- [ ] T040 [US1] `app/runner_bridge.py` — `start_run(text, files)` launches the async runner on a **background thread**, returns a handle with `drain_events()`, `done()`, `result()`/`report_stream()`. The thread runs only core code (no `st.*`). **Only** core touchpoint (FR-013).
-- [ ] T041 [P] [US1] `app/state/session.py` — init `messages`, `run_id`, `events`, `run_status`, `report` + helpers.
-- [ ] T042 [P] [US1] `app/components/disclaimer.py` — persistent medical-disclaimer banner (Principle V).
-- [ ] T043 [P] [US1] `app/components/chat.py` — `st.chat_input` + `st.chat_message` history render.
-- [ ] T044 [P] [US1] `app/components/report_view.py` — `st.tabs(Profile|Standard Care|Trials|Off-Label)` + `st.write_stream`/`st.markdown`; disclaimer caption.
-- [ ] T045 [US1] `app/main.py` — page config, layout, disclaimer, chat input → `runner_bridge.start_run` → render report (non-blocking).
+- [x] T040 [US1] `app/runner_bridge.py` — `start_run(text, files)` launches the async runner on a **background thread**, returns a handle with `drain_events()`, `done()`, `result()`/`report_stream()`. The thread runs only core code (no `st.*`). **Only** core touchpoint (FR-013).
+- [x] T041 [P] [US1] `app/state/session.py` — init `messages`, `run_id`, `events`, `run_status`, `report` + helpers.
+- [x] T042 [P] [US1] `app/components/disclaimer.py` — persistent medical-disclaimer banner (Principle V).
+- [x] T043 [P] [US1] `app/components/chat.py` — `st.chat_input` + `st.chat_message` history render.
+- [x] T044 [P] [US1] `app/components/report_view.py` — `st.tabs(Profile|Standard Care|Trials|Off-Label)` + `st.write_stream`/`st.markdown`; disclaimer caption.
+- [x] T045 [US1] `app/main.py` — page config, layout, disclaimer, chat input → `runner_bridge.start_run` → render report (non-blocking).
 - [ ] T046 [P] [US1] `tests/app/unit/test_chat_flow.py` — `st.testing.AppTest` with a **stubbed runner_bridge** (canned report): disclaimer present, report tabs populated. No live agents.
 
 **Checkpoint**: MVP works — a chat message yields a cited, disclaimed report.

@@ -1,0 +1,47 @@
+sites:
+  - id: nccn
+    domain: nccn.org
+    priority: 1
+    enabled: true
+  - id: esmo
+    domain: esmo.org
+    priority: 1
+    enabled: true
+  - id: nci
+    domain: cancer.gov
+    priority: 2
+    enabled: true
+  - id: nice
+    domain: nice.org.uk
+    priority: 2
+    enabled: true
+  - id: asco
+    domain: asco.org
+    priority: 3
+    enabled: false
+
+search:
+  provider: serper
+  top_k_per_site: 1
+  max_total_sources: 5
+  query_template: "{condition} {stage} standard of care treatment guidelines"
+
+fetch:
+  timeout_seconds: 15
+  max_content_chars: 12000
+  user_agent: "CDSS-ResearchBot/0.1"
+
+llm:
+  provider: groq
+  max_tokens_intake: 1024
+  max_tokens_source_reader: 1024
+  max_tokens_synthesizer: 4096
+  model_preference:
+    - deepseek-r1-distill-llama-70b
+    - deepseek-r1-distill-qwen-32b
+    - deepseek-r1-distill-llama-8b
+    - llama-3.3-70b-versatile
+    - llama-3.1-70b-versatile
+    - llama3-70b-8192
+    - llama-3.1-8b-instant
+    - llama3-8b-8192
