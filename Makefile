@@ -1,7 +1,7 @@
 .PHONY: run test lint guards docker-up
 
 run:
-	streamlit run app/main.py
+	python -m streamlit run app/main.py
 
 test:
 	pytest tests/ -v
