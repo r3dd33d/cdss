@@ -1,0 +1,203 @@
+{
+  "schema_version": "1.0",
+  "extensions": {
+    "git": {
+      "version": "1.0.0",
+      "source": "local",
+      "manifest_hash": "sha256:9731aa8143a72fbebfdb440f155038ab42642517c2b2bdbbf67c8fdbe076ed79",
+      "enabled": true,
+      "priority": 10,
+      "registered_commands": {
+        "claude": [
+          "speckit.git.feature",
+          "speckit.git.validate",
+          "speckit.git.remote",
+          "speckit.git.initialize",
+          "speckit.git.commit"
+        ]
+      },
+      "registered_skills": [],
+      "installed_at": "2026-06-21T16:04:21.195065+00:00"
+    },
+    "evals": {
+      "version": "1.0.0",
+      "source": "local",
+      "manifest_hash": "sha256:c35b73c6c05bcbf6a5189dc38f2f67061297a52cc9367a241477f731f0c0619b",
+      "enabled": true,
+      "priority": 10,
+      "registered_commands": {
+        "claude": [
+          "adlc.evals.init",
+          "evals.init",
+          "adlc.evals.specify",
+          "evals.specify",
+          "adlc.evals.clarify",
+          "evals.clarify",
+          "adlc.evals.implement",
+          "evals.implement",
+          "adlc.evals.validate",
+          "evals.validate",
+          "adlc.evals.trace",
+          "evals.trace"
+        ]
+      },
+      "registered_skills": [
+        "speckit-adlc-evals-init",
+        "speckit-adlc-evals-specify",
+        "speckit-adlc-evals-clarify",
+        "speckit-adlc-evals-implement",
+        "speckit-adlc-evals-validate",
+        "speckit-adlc-evals-trace"
+      ],
+      "installed_at": "2026-06-21T16:04:21.299981+00:00"
+    },
+    "levelup": {
+      "version": "1.1.6",
+      "source": "local",
+      "manifest_hash": "sha256:b2e403515e7665663d9e3135e0bc00679b85aa2d67eee4b53d6dd1c7005c00e0",
+      "enabled": true,
+      "priority": 10,
+      "registered_commands": {
+        "claude": [
+          "adlc.levelup.init",
+          "levelup.init",
+          "adlc.levelup.clarify",
+          "levelup.clarify",
+          "adlc.levelup.specify",
+          "levelup.specify",
+          "adlc.levelup.skills",
+          "levelup.skills",
+          "adlc.levelup.implement",
+          "levelup.implement",
+          "adlc.levelup.trace",
+          "levelup.trace",
+          "adlc.levelup.validate",
+          "levelup.validate"
+        ]
+      },
+      "registered_skills": [
+        "speckit-adlc-levelup-init",
+        "speckit-adlc-levelup-clarify",
+        "speckit-adlc-levelup-specify",
+        "speckit-adlc-levelup-skills",
+        "speckit-adlc-levelup-implement",
+        "speckit-adlc-levelup-trace",
+        "speckit-adlc-levelup-validate"
+      ],
+      "installed_at": "2026-06-21T16:04:21.336885+00:00"
+    },
+    "quick": {
+      "version": "1.0.2",
+      "source": "local",
+      "manifest_hash": "sha256:5c997291556633ceac82db8347361d4c81550f6fcf1c78c0537e22f7c10b514e",
+      "enabled": true,
+      "priority": 10,
+      "registered_commands": {
+        "claude": [
+          "adlc.quick.implement",
+          "quick.implement"
+        ]
+      },
+      "registered_skills": [
+        "speckit-adlc-quick-implement"
+      ],
+      "installed_at": "2026-06-21T16:04:21.341538+00:00"
+    },
+    "product": {
+      "version": "1.1.8",
+      "source": "local",
+      "manifest_hash": "sha256:9f9efd249782d3e438a66c5a4540965ffbd913fe44e5d8d290d2e5c3ad5075dc",
+      "enabled": true,
+      "priority": 10,
+      "registered_commands": {
+        "claude": [
+          "adlc.product.init",
+          "product.init",
+          "adlc.product.specify",
+          "product.specify",
+          "adlc.product.clarify",
+          "product.clarify",
+          "adlc.product.implement",
+          "product.implement",
+          "adlc.product.analyze",
+          "product.analyze",
+          "adlc.product.validate",
+          "product.validate",
+          "adlc.product.roadmap",
+          "product.roadmap",
+          "adlc.product.link",
+          "product.link"
+        ]
+      },
+      "registered_skills": [
+        "speckit-adlc-product-init",
+        "speckit-adlc-product-specify",
+        "speckit-adlc-product-clarify",
+        "speckit-adlc-product-implement",
+        "speckit-adlc-product-analyze",
+        "speckit-adlc-product-validate",
+        "speckit-adlc-product-roadmap",
+        "speckit-adlc-product-link"
+      ],
+      "installed_at": "2026-06-21T16:04:21.392364+00:00"
+    },
+    "architect": {
+      "version": "2.0.1",
+      "source": "local",
+      "manifest_hash": "sha256:5b94414b2dd3e6ee85f0388b51eaf7a421bc470734ca7a917a8a7662d53879fb",
+      "enabled": true,
+      "priority": 10,
+      "registered_commands": {
+        "claude": [
+          "adlc.architect.init",
+          "architect.init",
+          "adlc.architect.specify",
+          "architect.specify",
+          "adlc.architect.clarify",
+          "architect.clarify",
+          "adlc.architect.implement",
+          "architect.implement",
+          "adlc.architect.analyze",
+          "architect.analyze",
+          "adlc.architect.validate",
+          "architect.validate"
+        ]
+      },
+      "registered_skills": [
+        "speckit-adlc-architect-init",
+        "speckit-adlc-architect-specify",
+        "speckit-adlc-architect-clarify",
+        "speckit-adlc-architect-implement",
+        "speckit-adlc-architect-analyze",
+        "speckit-adlc-architect-validate"
+      ],
+      "installed_at": "2026-06-21T16:04:21.441371+00:00"
+    },
+    "tdd": {
+      "version": "1.0.2",
+      "source": "local",
+      "manifest_hash": "sha256:20b178b15190b3662b5737880b8675c15f00374fccff2367b549d7ce751016b2",
+      "enabled": true,
+      "priority": 10,
+      "registered_commands": {
+        "claude": [
+          "adlc.tdd.plan",
+          "tdd.plan",
+          "adlc.tdd.tasks",
+          "tdd.tasks",
+          "adlc.tdd.implement",
+          "tdd.implement",
+          "adlc.tdd.validate",
+          "tdd.validate"
+        ]
+      },
+      "registered_skills": [
+        "speckit-adlc-tdd-plan",
+        "speckit-adlc-tdd-tasks",
+        "speckit-adlc-tdd-implement",
+        "speckit-adlc-tdd-validate"
+      ],
+      "installed_at": "2026-06-21T16:04:21.467258+00:00"
+    }
+  }
+}

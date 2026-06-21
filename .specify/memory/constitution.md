@@ -1,50 +1,143 @@
-# [PROJECT_NAME] Constitution
-<!-- Example: Spec Constitution, TaskFlow Constitution, etc. -->
+# CDSS Constitution
+
+Clinical Decision Support System — a research-only, multi-agent patient-research
+tool ported from `CDSS_Pipeline_Colab.ipynb` into a production-grade,
+deep-module **Streamlit application** driven by a free LLM (Groq). There is no
+separate web backend — Streamlit runs the agent pipeline in-process.
 
 ## Core Principles
 
-### [PRINCIPLE_1_NAME]
-<!-- Example: I. Library-First -->
-[PRINCIPLE_1_DESCRIPTION]
-<!-- Example: Every feature starts as a standalone library; Libraries must be self-contained, independently testable, documented; Clear purpose required - no organizational-only libraries -->
+### I. Deep Modules, Small Files (NON-NEGOTIABLE)
 
-### [PRINCIPLE_2_NAME]
-<!-- Example: II. CLI Interface -->
-[PRINCIPLE_2_DESCRIPTION]
-<!-- Example: Every library exposes functionality via CLI; Text in/out protocol: stdin/args → stdout, errors → stderr; Support JSON + human-readable formats -->
+Every module exposes a **narrow interface over substantial functionality**
+(Ousterhout's deep-module principle). Implementation complexity is hidden behind
+small public surfaces.
 
-### [PRINCIPLE_3_NAME]
-<!-- Example: III. Test-First (NON-NEGOTIABLE) -->
-[PRINCIPLE_3_DESCRIPTION]
-<!-- Example: TDD mandatory: Tests written → User approved → Tests fail → Then implement; Red-Green-Refactor cycle strictly enforced -->
+- A single source file SHOULD stay under ~200 lines and MUST stay under 400.
+  When a file grows past this, split by responsibility, not by line count.
+- Public interfaces are minimal: callers depend on abstract base classes and
+  Pydantic models, never on concrete adapters or transport details.
+- No "god" files. `agents/`, `sources/`, `knowledge/`, and `pipeline/` are
+  packages of focused leaf modules, each doing one thing.
+- Shallow pass-through wrappers and "manager/util/helper" grab-bags are
+  prohibited unless they genuinely hide complexity.
 
-### [PRINCIPLE_4_NAME]
-<!-- Example: IV. Integration Testing -->
-[PRINCIPLE_4_DESCRIPTION]
-<!-- Example: Focus areas requiring integration tests: New library contract tests, Contract changes, Inter-service communication, Shared schemas -->
+### II. UI/Core Separation — Streamlit-Only (NON-NEGOTIABLE)
 
-### [PRINCIPLE_5_NAME]
-<!-- Example: V. Observability, VI. Versioning & Breaking Changes, VII. Simplicity -->
-[PRINCIPLE_5_DESCRIPTION]
-<!-- Example: Text I/O ensures debuggability; Structured logging required; Or: MAJOR.MINOR.BUILD format; Or: Start simple, YAGNI principles -->
+This project ships as a single Streamlit app. We do **not** use FastAPI or any
+separate web server; Streamlit runs the agent pipeline in-process.
 
-## [SECTION_2_NAME]
-<!-- Example: Additional Constraints, Security Requirements, Performance Standards, etc. -->
+- All agent, LLM, pipeline, and adapter logic lives in a headless, importable
+  core package (`cdss/`) that MUST NOT import `streamlit`.
+- All UI lives in `app/`; UI modules MUST NOT contain agent, LLM, or prompt
+  logic — they call the core through one narrow runner/service interface.
+- Live updates flow from the core's in-memory event bus to the UI via session
+  state and reruns (no HTTP/SSE server).
+- A CI guard enforces that `cdss/` never imports `streamlit`, keeping the core
+  testable and UI-swappable (a different UI or an API could be added later
+  without touching the core).
 
-[SECTION_2_CONTENT]
-<!-- Example: Technology stack requirements, compliance standards, deployment policies, etc. -->
+### III. Free-Model-First & Provider Abstraction
 
-## [SECTION_3_NAME]
-<!-- Example: Development Workflow, Review Process, Quality Gates, etc. -->
+The system runs on a **free LLM tier** (Groq) by default and never hard-codes a
+model.
 
-[SECTION_3_CONTENT]
-<!-- Example: Code review requirements, testing gates, deployment approval process, etc. -->
+- Model selection is data-driven: query available models at runtime and pick by
+  a configured preference order (DeepSeek R1 distill → Llama fallback), exactly
+  as the notebook does.
+- All LLM access goes through a single `llm/client.py` behind a narrow `chat()`
+  interface. Swapping providers (or self-hosting) MUST NOT touch agent code.
+- Token budgets, model preference, and limits live in YAML config, not in code.
+
+### IV. Agents Spawn Through the Factory; Everything Emits Events
+
+- All agent creation flows through one `AgentFactory.spawn()` — the single place
+  for lifecycle, run-id generation, and parent/child tracing.
+- Coordinators plan and delegate; leaf agents do exactly one unit of work
+  (one source → one summary). One source = one agent.
+- Adapters are not agents: HTTP fetch, search, PDF/HTML extraction, and KG
+  queries live in infrastructure packages (`sources/`, `knowledge/`,
+  `integrations/`), never inside agent classes.
+- Every spawn, fetch, LLM call, phase transition, and failure emits a typed
+  event on the per-run event bus so the UI can render a live trace tree.
+
+### V. Research-Only Safety (NON-NEGOTIABLE)
+
+This tool is for research and education — **not** medical advice.
+
+- Every report and every UI surface MUST display the medical disclaimer.
+- Agents MUST NOT invent doses, recommendations, or eligibility decisions; they
+  summarize sourced material and flag uncertainty.
+- Inputs are treated as untrusted: validate and sanitize at the API boundary;
+  guard against prompt injection in fetched web content; never echo secrets.
+- Patient input is sensitive. Do not log raw patient text at INFO; redact PII in
+  traces and persisted events.
+
+### VI. Surgical Changes — Minimal Diffs (NON-NEGOTIABLE)
+
+Change only what must change; prefer the smallest edit that does the job.
+
+- Touch a block only when necessary. If editing, adding, or removing a few lines
+  achieves the goal, do that instead of deleting or rewriting the whole block.
+- Preserve surrounding code, names, and structure; avoid incidental reformatting
+  or churn that hides the real change in review.
+- A larger rewrite is allowed only when a smaller edit cannot work, and must be
+  justified in the change description.
+
+### VII. Short Comments
+
+Comments are brief. A comment MUST be one or two sentences — never more.
+
+- Comment *why*, not *what*; let the code say what it does.
+- No long block/banner comments, no commented-out code, no narrating obvious
+  steps.
+
+## Additional Constraints
+
+**Technology stack** (locked unless amended): Python 3.11+, a single **Streamlit**
+app (no FastAPI/Uvicorn), LangGraph orchestration, Pydantic v2 models, Groq
+(OpenAI-compatible) LLM, NetworkX + PrimeKG knowledge graph, optional Qdrant
+vector store, ClinicalTrials.gov API v2. Configuration via `pydantic-settings` +
+YAML. The headless core (`cdss/`) and the UI (`app/`) are separate packages; the
+core never imports Streamlit.
+
+**Secrets** live only in backend environment variables (`GROQ_API_KEY`,
+`SERPER_API_KEY`, …). They never appear in the frontend, in logs, in events, or
+in committed files. `.env` is git-ignored; `.env.example` is the contract.
+
+**Config over code**: allowed source sites, search provider, fetch limits, model
+preference, and token budgets live in `sources.yaml` and are toggleable without
+code changes.
+
+## Development Workflow
+
+- **Spec-driven**: changes flow constitution → spec → plan → tasks → implement.
+  No production code is written ahead of an approved plan.
+- **Layered tests**: pure `core/` models and `sources/` adapters are unit-tested
+  with mocked I/O; the `AgentFactory` and event bus have unit tests for the
+  spawn/event tree; the pipeline has integration tests with all external calls
+  mocked. Core tests never import Streamlit; UI tests never run real agents.
+- **Quality gates** (must pass to merge): file-size limit (Principle I), the
+  `cdss/`-must-not-import-`streamlit` guard (Principle II), one-to-two-sentence
+  comments (Principle VII), minimal-diff review (Principle VI), no secrets in the
+  repo, disclaimer present in report output, and the full test suite green.
+- **Deterministic ports of notebook logic**: each ported agent maps to a named
+  notebook cell and preserves its observable behavior (intake parsing, retry
+  rule, KG traversal, synthesizer disclaimer).
 
 ## Governance
-<!-- Example: Constitution supersedes all other practices; Amendments require documentation, approval, migration plan -->
 
-[GOVERNANCE_RULES]
-<!-- Example: All PRs/reviews must verify compliance; Complexity must be justified; Use [GUIDANCE_FILE] for runtime development guidance -->
+This constitution supersedes ad-hoc practices. Core Principles marked
+NON-NEGOTIABLE may not be waived; other constraints may be amended via a
+documented change to this file with a version bump and rationale.
 
-**Version**: [CONSTITUTION_VERSION] | **Ratified**: [RATIFICATION_DATE] | **Last Amended**: [LAST_AMENDED_DATE]
-<!-- Example: Version: 2.1.1 | Ratified: 2025-06-13 | Last Amended: 2025-07-16 -->
+- Every plan MUST include a Constitution Check section and pass it before Phase 0
+  research and again after design. Unavoidable violations go in the plan's
+  Complexity Tracking table with justification, or the design is simplified.
+- Amendments follow semantic versioning: **MAJOR** for removing/redefining a
+  principle, **MINOR** for adding a principle or section, **PATCH** for
+  clarifications.
+- Runtime development guidance for agents lives alongside the feature artifacts
+  in `specs/`; this file holds the durable, non-negotiable rules.
+
+**Version**: 2.0.0 | **Ratified**: 2026-06-21 | **Last Amended**: 2026-06-21

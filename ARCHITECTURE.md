@@ -2,8 +2,15 @@
 
 ## Architecture & Project Layout
 
-> **Baseline:** [CDSS_Pipeline_Colab.ipynb](../../../CDSS_Pipeline_Colab.ipynb) (5-agent research pipeline)  
-> **Goal:** Production-grade, scalable multi-agent system with live agent tracing in the UI.
+> **Baseline:** [CDSS_Pipeline_Colab.ipynb](CDSS_Pipeline_Colab.ipynb) (5-agent research pipeline)
+> **Goal:** A production-grade, deep-module **single Streamlit application** with live agent tracing in the chat UI.
+> **Governing rules:** [.specify/memory/constitution.md](.specify/memory/constitution.md) (v2.0.0 — Streamlit-only, no FastAPI).
+> **Detailed contracts:** [specs/001-cdss-multi-agent-pipeline/](specs/001-cdss-multi-agent-pipeline/) (spec, plan, data-model, contracts, tasks).
+
+> **Note — supersedes the original draft.** An earlier version of this file described a
+> FastAPI backend + separate Streamlit frontend talking over REST/SSE. That topology is
+> **removed**: per Constitution v2.0.0 this is one Streamlit app whose headless `cdss/`
+> core runs the pipeline in-process. This document now reflects that.
 
 ---
 
@@ -11,13 +18,13 @@
 
 1. [Design Principles](#1-design-principles)
 2. [High-Level Architecture](#2-high-level-architecture)
-3. [Frontend / Backend Separation Contract](#3-frontend--backend-separation-contract)
+3. [UI / Core Separation Contract](#3-ui--core-separation-contract)
 4. [Complete Directory Layout](#4-complete-directory-layout)
 5. [Module Responsibilities](#5-module-responsibilities)
 6. [Agent Hierarchy & Factory](#6-agent-hierarchy--factory)
 7. [Pipeline Flow](#7-pipeline-flow)
-8. [Backend API Specification](#8-backend-api-specification)
-9. [Frontend (Streamlit) Specification](#9-frontend-streamlit-specification)
+8. [Runner Bridge Interface](#8-runner-bridge-interface)
+9. [Chat UI (Streamlit) Specification](#9-chat-ui-streamlit-specification)
 10. [Configuration & Environment](#10-configuration--environment)
 11. [Observability & Event Model](#11-observability--event-model)
 12. [Data Models](#12-data-models)
@@ -29,49 +36,52 @@
 
 ## 1. Design Principles
 
+Mirrors the project constitution; see [constitution.md](.specify/memory/constitution.md) for the authoritative wording.
+
 | # | Principle | Rule |
 |---|-----------|------|
-| 1 | **Strict FE/BE split** | The frontend never imports backend code, never calls LLMs, never spawns agents, never holds API keys. |
-| 2 | **One source = one agent** | Each URL/document gets its own `SourceReaderAgent` for isolated context and parallel execution. |
-| 3 | **Coordinators spawn, leaves work** | Coordinator agents plan and delegate; leaf agents fetch, read, and summarize. |
-| 4 | **Factory owns spawning** | All agent creation goes through `AgentFactory` — single place for lifecycle + events. |
-| 5 | **Adapters ≠ agents** | HTTP, search, PDF parsing live in `sources/` (infrastructure), not inside agent classes. |
-| 6 | **Events everywhere** | Every spawn, fetch, LLM call, and failure emits an event for the UI trace panel. |
-| 7 | **Config over code** | Allowed sites, search providers, and limits live in YAML — not hardcoded in agents. |
-| 8 | **Research only** | All outputs include medical disclaimers. This is not medical advice. |
+| 1 | **Deep modules, small files** | Narrow interfaces over substantial functionality; ≤~200 lines/file (≤400 hard limit). Split by responsibility, not line count. |
+| 2 | **UI/Core separation (Streamlit-only)** | The `app/` UI imports the headless `cdss/` core through one `runner_bridge` interface. `cdss/` never imports `streamlit`. No FastAPI/REST/SSE. |
+| 3 | **One source = one agent** | Each URL/document gets its own `SourceReaderAgent` for isolated context and parallel execution. |
+| 4 | **Coordinators spawn, leaves work** | Coordinator agents plan and delegate; leaf agents fetch, read, and summarize. |
+| 5 | **Factory owns spawning** | All agent creation goes through `AgentFactory` — single place for lifecycle + events. |
+| 6 | **Adapters ≠ agents** | HTTP, search, PDF parsing live in `sources/` (infrastructure), not inside agent classes. |
+| 7 | **Events everywhere** | Every spawn, fetch, LLM call, and failure emits an event for the UI trace panel. |
+| 8 | **Free-model-first** | LLM selected at runtime from Groq's free tier by configured preference order; no hard-coded model. |
+| 9 | **Config over code** | Allowed sites, search providers, model preference, and limits live in YAML — not hardcoded. |
+| 10 | **Surgical changes** | Prefer the smallest edit; change a block only when necessary. Larger rewrites must be justified. |
+| 11 | **Short comments** | One or two sentences; comment *why*, not *what*. |
+| 12 | **Research only** | All outputs include medical disclaimers. This is not medical advice. |
 
 ---
 
 ## 2. High-Level Architecture
 
+One process: `streamlit run app/main.py`. The UI drives the in-process core; events
+flow back through an in-memory bus — no network boundary.
+
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                        FRONTEND (Streamlit)                      │
-│  • Chat input                                                    │
-│  • Agent activity trace (live via SSE/WebSocket)                 │
-│  • Report viewer                                                 │
-│  • NO business logic · NO LLM · NO agent code · NO secrets       │
-└────────────────────────────┬────────────────────────────────────┘
-                             │ HTTP REST + SSE (or WebSocket)
-                             ▼
+│                  STREAMLIT APP  (app/)  — UI only                │
+│  • st.chat_input (text + PDF)      • live agent trace (st.status) │
+│  • st.chat_message history         • report tabs (st.write_stream)│
+│  • persistent disclaimer banner                                  │
+│  • NO agents · NO LLM · NO prompts · NO secrets · NO streamlit-in-core │
+└───────────────┬───────────────────────────────▲─────────────────┘
+                │ runner_bridge.start_run()      │ drain_events() / result()
+                │ (background thread)            │ (in-process queue)
+                ▼                                │
 ┌─────────────────────────────────────────────────────────────────┐
-│                     BACKEND (FastAPI)                            │
+│                     HEADLESS CORE  (cdss/)                       │
 │  ┌──────────────┐  ┌──────────────┐  ┌──────────────────────┐  │
-│  │  API Layer   │→ │   Pipeline   │→ │   Agent Factory      │  │
-│  │  (routers)   │  │  (LangGraph) │  │   + Registry         │  │
-│  └──────────────┘  └──────────────┘  └──────────┬───────────┘  │
-│                                                  │ spawn        │
-│         ┌────────────────────────────────────────┼──────────┐  │
-│         ▼                    ▼                   ▼          ▼  │
-│   IntakeAgent    ResearchCoordinator    SourceReaderAgents  …  │
-│         │                    │                   │              │
-│         └────────────────────┴───────────────────┘              │
-│                              │                                   │
+│  │  pipeline/   │→ │  AgentFactory│→ │  agents/ (registry)  │  │
+│  │  (LangGraph) │  │  + EventBus  │  │                      │  │
+│  └──────────────┘  └──────┬───────┘  └──────────┬───────────┘  │
+│         IntakeAgent  ResearchCoordinator  SourceReaderAgents …  │
 │                    ┌─────────┴─────────┐                        │
 │                    ▼                   ▼                        │
 │              sources/            knowledge/                     │
 │         (search, fetch)      (graph, vector)                    │
-│                    │                   │                        │
 │                    └─────────┬─────────┘                        │
 │                              ▼                                   │
 │                         llm/ (Groq)                             │
@@ -85,275 +95,178 @@
 
 | Layer | Technology |
 |-------|------------|
-| Frontend | Streamlit, `httpx` or `requests` (API client only), optional `streamlit-chat` |
-| Backend API | FastAPI, Uvicorn |
+| App / UI | Streamlit (`st.chat_input`, `st.chat_message`, `st.write_stream`, `st.status`, `st.fragment`, `st.cache_resource`) |
+| UI→Core bridge | `app/runner_bridge.py` — background thread + thread-safe event queue (no HTTP) |
 | Orchestration | LangGraph |
-| LLM | Groq API (DeepSeek R1 / Llama fallback) |
+| LLM | Groq API (DeepSeek R1 distill / Llama fallback), runtime model selection |
 | Search | Serper / Tavily / Google CSE (configurable) |
 | Graph | NetworkX + PrimeKG |
-| Vector (fallback) | Qdrant (optional, for uploaded PDFs) |
+| Vector (optional) | Qdrant (for uploaded PDFs) |
 | Config | pydantic-settings + YAML |
-| Events | In-memory EventBus + SSE stream to frontend |
+| Events | In-memory `EventBus` + `TraceStore` per run, drained by the UI |
 
 ---
 
-## 3. Frontend / Backend Separation Contract
+## 3. UI / Core Separation Contract
 
-### Frontend MAY
+This replaces the old "Frontend/Backend separation." There is no network boundary —
+the separation is an **import boundary** inside one app, enforced by CI.
 
-- Render UI components (chat, trace tree, report tabs)
-- Call backend REST endpoints
-- Subscribe to SSE/WebSocket for live events
-- Store UI-only state in `st.session_state` (messages, selected tab, run_id)
-- Display markdown reports returned by the API
-- Handle user input validation (empty message, max length)
+### UI (`app/`) MAY
 
-### Frontend MUST NOT
+- Render chat, trace tree, report tabs, disclaimer
+- Call `runner_bridge` to start a run and drain events
+- Store UI-only state in `st.session_state` (messages, run_id, events, status)
+- Display the markdown report and validate user input (empty/over-length message)
 
-- Import anything from `backend/` or `cdss/` package
-- Hold `GROQ_API_KEY`, search API keys, or any secret
-- Call Groq, OpenAI, ClinicalTrials.gov, or any external API directly
-- Instantiate agents, LangGraph, or pipeline runners
-- Contain prompts, LLM logic, or agent factory code
-- Parse PDFs, scrape websites, or run knowledge graph queries
+### UI (`app/`) MUST NOT
 
-### Backend MUST
+- Import agents, LangGraph, the pipeline, or any `cdss/` internals **other than** `runner_bridge`
+- Hold `GROQ_API_KEY`, search keys, or any secret
+- Call Groq, ClinicalTrials.gov, or any external API directly
+- Contain prompts, LLM logic, agent code, PDF parsing, or KG queries
 
-- Expose all functionality via documented HTTP endpoints
-- Stream agent events to the frontend in real time
+### Core (`cdss/`) MUST
+
+- Contain all agent/LLM/pipeline/adapter logic behind narrow interfaces
 - Own all secrets via environment variables
-- Return structured JSON + markdown report payloads
-- Enforce rate limits and input sanitization
+- Publish typed events to the per-run `EventBus`
+- **Never import `streamlit`** (CI import-direction guard enforces this)
 
 ### Communication Pattern
 
 ```
-Frontend                          Backend
-────────                          ───────
-POST /api/v1/runs                 → start pipeline, return run_id
-GET  /api/v1/runs/{id}/events     → SSE stream of agent events
-GET  /api/v1/runs/{id}            → poll run status + final report
-GET  /api/v1/health               → liveness check
+UI (app/)                              Core (cdss/)
+─────────                              ────────────
+runner_bridge.start_run(text, files) → build_runner().run(...)  [background thread]
+handle.drain_events()                ← EventBus → thread-safe queue
+handle.done() / result()             ← FinalReport (or error)
+handle.report_stream()               ← optional synthesizer token stream
 ```
 
-The frontend treats the backend as a **black box**. Replacing Streamlit with React later requires zero backend changes.
+The UI treats the core as a black box behind `runner_bridge`. Replacing Streamlit with
+another UI (or adding an API later) requires only a new bridge — zero core changes.
+Full contract: [contracts/runner.md](specs/001-cdss-multi-agent-pipeline/contracts/runner.md).
 
 ---
 
 ## 4. Complete Directory Layout
 
 ```
-cdss/                                    # Project root (standalone repo or monorepo subfolder)
+cdss-ds/                                 # project root (single Streamlit app)
 │
 ├── README.md
 ├── .env.example
 ├── .gitignore
-├── docker-compose.yml                   # backend + optional qdrant
-├── Makefile                             # dev shortcuts
+├── pyproject.toml
+├── requirements.txt                     # one env: streamlit + core deps
+├── Dockerfile                           # entry: streamlit run app/main.py
+├── docker-compose.yml                   # app + optional qdrant
+├── Makefile
 │
-├── docs/
-│   ├── ARCHITECTURE.md                    # ← this file
-│   ├── API.md                             # OpenAPI-derived endpoint docs
-│   └── AGENTS.md                          # agent catalog & spawn rules
+├── ARCHITECTURE.md                      # ← this file
+├── CDSS_Pipeline_Colab.ipynb            # baseline notebook
 │
-├── backend/                               # ═══ BACKEND ONLY ═══
-│   ├── pyproject.toml
-│   ├── requirements.txt
-│   ├── Dockerfile
+├── cdss/                                # ═══ HEADLESS CORE — never imports streamlit ═══
+│   ├── __init__.py
 │   │
-│   └── cdss/                              # Python package
-│       ├── __init__.py
-│       │
-│       ├── main.py                        # FastAPI app entry: uvicorn cdss.main:app
-│       │
-│       ├── api/                           # HTTP layer — thin, no business logic
-│       │   ├── __init__.py
-│       │   ├── deps.py                    # DI: factory, settings, event bus
-│       │   ├── routers/
-│       │   │   ├── health.py
-│       │   │   ├── runs.py                # POST /runs, GET /runs/{id}
-│       │   │   └── events.py              # GET /runs/{id}/events (SSE)
-│       │   └── schemas/
-│       │       ├── requests.py            # CreateRunRequest
-│       │       ├── responses.py           # RunResponse, RunStatusResponse
-│       │       └── events.py              # AgentEventDTO (API-facing)
-│       │
-│       ├── config/
-│       │   ├── settings.py                # pydantic-settings (env vars)
-│       │   └── sources.yaml               # allowed sites, search config
-│       │
-│       ├── core/                          # Domain models — pure Python, no I/O
-│       │   ├── __init__.py
-│       │   ├── enums.py                   # AgentType, RunStatus, EventType
-│       │   ├── exceptions.py
-│       │   └── models/
-│       │       ├── patient.py             # Biomarker, PatientProfile
-│       │       ├── source.py              # SourceRef, SourceSummary
-│       │       ├── trial.py               # ClinicalTrial
-│       │       ├── hypothesis.py          # OffLabelHypothesis
-│       │       └── report.py              # FinalReport
-│       │
-│       ├── observability/
-│       │   ├── __init__.py
-│       │   ├── events.py                  # AgentSpawned, SourceFetched, ...
-│       │   ├── event_bus.py               # pub/sub per run_id
-│       │   ├── run_context.py             # run_id, parent_id, depth
-│       │   └── trace_store.py             # append-only event log per run
-│       │
-│       ├── llm/
-│       │   ├── __init__.py
-│       │   ├── client.py                  # Groq OpenAI-compatible client
-│       │   ├── model_selector.py          # preference order from notebook
-│       │   ├── json_utils.py              # strip_json_fences
-│       │   └── prompts/
-│       │       ├── intake.py
-│       │       ├── source_reader.py
-│       │       ├── standard_care.py
-│       │       ├── cross_indication.py
-│       │       └── synthesizer.py
-│       │
-│       ├── sources/                       # Infrastructure adapters (NOT agents)
-│       │   ├── __init__.py
-│       │   ├── registry.py                # load sources.yaml
-│       │   ├── search/
-│       │   │   ├── base.py                # AbstractSearchProvider
-│       │   │   ├── serper.py
-│       │   │   ├── tavily.py
-│       │   │   └── site_scoped.py         # site:nccn.org OR site:esmo.org
-│       │   ├── fetch/
-│       │   │   ├── base.py                # AbstractFetcher
-│       │   │   ├── httpx_fetcher.py
-│       │   │   └── pdf_fetcher.py
-│       │   └── extract/
-│       │       ├── html.py                # trafilatura / readability
-│       │       └── pdf.py                 # pypdf
-│       │
-│       ├── knowledge/
-│       │   ├── __init__.py
-│       │   ├── graph/
-│       │   │   ├── loader.py              # PrimeKG → NetworkX
-│       │   │   └── queries.py             # find_drugs_for_gene, BFS
-│       │   └── vector/
-│       │       ├── store.py               # Qdrant abstraction
-│       │       ├── embedder.py            # BioBERT sentence-transformers
-│       │       └── ingest.py              # PDF chunk + upsert
-│       │
-│       ├── integrations/
-│       │   ├── __init__.py
-│       │   ├── clinical_trials.py         # ClinicalTrials.gov API v2
-│       │   └── pubmed.py                  # URL builder (future: fetch)
-│       │
-│       ├── agents/
-│       │   ├── __init__.py
-│       │   ├── base.py                    # BaseAgent, AgentTask, AgentResult
-│       │   ├── factory.py                 # AgentFactory.spawn()
-│       │   ├── registry.py                # AgentType → class map
-│       │   │
-│       │   ├── intake/
-│       │   │   └── intake_agent.py        # Notebook Agent 1
-│       │   │
-│       │   ├── research/                  # Replaces notebook Agent 2
-│       │   │   ├── coordinator_agent.py   # search → spawn readers
-│       │   │   ├── source_reader_agent.py # 1 URL → 1 summary (LEAF)
-│       │   │   └── aggregator_agent.py    # merge summaries → standard care
-│       │   │
-│       │   ├── trials/
-│       │   │   └── trials_agent.py        # Notebook Agent 3
-│       │   │
-│       │   ├── cross_indication/
-│       │   │   ├── coordinator_agent.py   # KG route vs LLM fallback
-│       │   │   ├── kg_traversal_agent.py  # PrimeKG BFS
-│       │   │   └── hypothesis_agent.py    # optional: 1 drug → 1 agent
-│       │   │
-│       │   └── synthesis/
-│       │       └── report_agent.py        # Notebook Agent 5
-│       │
-│       └── pipeline/
-│           ├── __init__.py
-│           ├── state.py                   # PipelineState (LangGraph state)
-│           ├── nodes.py                   # thin wrappers calling agents
-│           ├── workflow.py                # LangGraph graph compile
-│           └── runner.py                  # async invoke + event wiring
-│
-├── frontend/                              # ═══ FRONTEND ONLY ═══
-│   ├── pyproject.toml                     # separate deps (streamlit, httpx)
-│   ├── requirements.txt
-│   ├── Dockerfile
-│   ├── .streamlit/
-│   │   └── config.toml                    # theme, server port
+│   ├── config/
+│   │   ├── settings.py                  # pydantic-settings (env vars)
+│   │   └── sources.yaml                 # allowed sites, search/fetch/llm config
 │   │
-│   └── app/
-│       ├── main.py                        # streamlit run app/main.py
-│       │
-│       ├── api_client/                  # ONLY way to talk to backend
-│       │   ├── __init__.py
-│       │   ├── client.py                  # CDSSApiClient class
-│       │   ├── models.py                  # FE DTOs (mirror API responses)
-│       │   └── sse.py                     # SSE event stream reader
-│       │
-│       ├── components/
-│       │   ├── __init__.py
-│       │   ├── chat.py                    # message input + history display
-│       │   ├── agent_trace.py             # live run tree / timeline
-│       │   ├── report_view.py             # markdown report tabs
-│       │   ├── run_status.py              # progress indicator
-│       │   └── disclaimer.py              # static medical disclaimer banner
-│       │
-│       ├── pages/
-│       │   └── history.py                 # past runs list (optional v2)
-│       │
-│       └── state/
-│           └── session.py                 # st.session_state init + helpers
+│   ├── core/                            # pure domain — no I/O
+│   │   ├── enums.py                     # AgentType, RunStatus, EventType
+│   │   ├── exceptions.py
+│   │   └── models/                      # patient, source, trial, hypothesis, report
+│   │
+│   ├── observability/
+│   │   ├── events.py                    # AgentSpawned, SourceFetched, … (+ PII redaction)
+│   │   ├── event_bus.py                 # per-run pub/sub; thread-safe drain for the UI
+│   │   ├── run_context.py               # run_id, parent_id, depth
+│   │   └── trace_store.py               # append-only event log per run
+│   │
+│   ├── llm/
+│   │   ├── client.py                    # Groq OpenAI-compatible client, chat()
+│   │   ├── model_selector.py            # runtime model discovery + preference order
+│   │   ├── json_utils.py                # strip_json_fences
+│   │   └── prompts/                     # intake, source_reader, synthesizer, …
+│   │
+│   ├── sources/                         # infrastructure adapters (NOT agents)
+│   │   ├── registry.py                  # load sources.yaml
+│   │   ├── search/                      # base, serper, site_scoped
+│   │   ├── fetch/                       # base, httpx_fetcher
+│   │   └── extract/                     # html, pdf
+│   │
+│   ├── knowledge/
+│   │   ├── graph/                       # loader (PrimeKG→NetworkX), queries (BFS)
+│   │   └── vector/                      # store, embedder, ingest (optional Qdrant)
+│   │
+│   ├── integrations/
+│   │   ├── clinical_trials.py           # ClinicalTrials.gov API v2
+│   │   └── pubmed.py                    # URL builder (future: fetch)
+│   │
+│   ├── agents/
+│   │   ├── base.py                      # BaseAgent, AgentTask, AgentResult
+│   │   ├── factory.py                   # AgentFactory.spawn()
+│   │   ├── registry.py                  # AgentType → class map
+│   │   ├── intake/                      # intake_agent.py
+│   │   ├── research/                    # coordinator, source_reader, aggregator
+│   │   ├── trials/                      # trials_agent.py
+│   │   ├── cross_indication/            # coordinator, kg_traversal, hypothesis
+│   │   └── synthesis/                   # report_agent.py
+│   │
+│   └── pipeline/
+│       ├── state.py                     # PipelineState (LangGraph state)
+│       ├── nodes.py                     # thin wrappers calling agents
+│       ├── workflow.py                  # LangGraph graph compile
+│       └── runner.py                    # build_runner(); async run() + event wiring
+│
+├── app/                                 # ═══ STREAMLIT UI — imports cdss/ via runner_bridge ═══
+│   ├── main.py                          # streamlit run app/main.py: layout + wiring
+│   ├── runner_bridge.py                 # ONLY core touchpoint: bg thread + event queue
+│   ├── state/
+│   │   └── session.py                   # st.session_state init + helpers
+│   └── components/
+│       ├── disclaimer.py                # persistent medical-disclaimer banner
+│       ├── suggestions.py               # suggestion chips (example prompts)
+│       ├── chat.py                      # st.chat_input(accept_file) + st.chat_message
+│       ├── agent_trace.py               # live spawn tree via st.status (fragment)
+│       ├── report_view.py               # st.tabs + st.write_stream
+│       └── feedback.py                  # st.feedback("thumbs") (optional)
 │
 └── tests/
-    ├── backend/
-    │   ├── unit/
-    │   │   ├── agents/
-    │   │   │   ├── test_factory.py
-    │   │   │   ├── test_source_reader.py
-    │   │   │   └── test_intake.py
-    │   │   ├── sources/
-    │   │   │   ├── test_site_scoped_search.py
-    │   │   │   └── test_html_extract.py
-    │   │   └── pipeline/
-    │   │       └── test_state.py
-    │   └── integration/
-    │       ├── test_api_runs.py
-    │       └── test_pipeline_smoke.py
-    │
-    └── frontend/
-        └── unit/
-            ├── test_api_client.py         # mock backend responses
-            └── test_session.py
+    ├── core/
+    │   ├── unit/                        # models, sources, agents, factory, llm, observability
+    │   └── integration/                 # pipeline_mvp, event_stream, full_pipeline (mocks)
+    └── app/
+        └── unit/                        # chat_flow, agent_trace, pdf_upload via st.testing.AppTest
 ```
 
 ---
 
 ## 5. Module Responsibilities
 
-### Backend
+### Core (`cdss/`)
 
 | Module | Responsibility |
 |--------|----------------|
-| `api/` | HTTP routing, request validation, response serialization, SSE streaming |
 | `config/` | Environment variables, YAML source registry |
 | `core/` | Pure domain models and enums — no side effects |
 | `observability/` | Event bus, run tracing, per-run event store |
-| `llm/` | Groq client, model selection, prompt templates |
+| `llm/` | Groq client, runtime model selection, prompt templates |
 | `sources/` | Web search, HTTP fetch, HTML/PDF extraction |
 | `knowledge/` | PrimeKG graph, optional Qdrant vector store |
 | `integrations/` | ClinicalTrials.gov and other external APIs |
 | `agents/` | All agent logic + factory + registry |
-| `pipeline/` | LangGraph workflow wiring and runner |
+| `pipeline/` | LangGraph workflow wiring and `runner` entry point |
 
-### Frontend
+### UI (`app/`)
 
 | Module | Responsibility |
 |--------|----------------|
-| `api_client/` | HTTP calls to backend, SSE subscription, response parsing |
-| `components/` | Streamlit UI widgets — display only |
-| `state/` | Session state initialization and UI helpers |
-| `pages/` | Optional multi-page Streamlit routes |
+| `runner_bridge.py` | Start runs on a background thread; expose event queue + result (only core touchpoint) |
+| `components/` | Streamlit chat/trace/report widgets — display only |
+| `state/` | Session-state initialization and UI helpers |
 
 ---
 
@@ -391,27 +304,17 @@ AgentType (enum)
 ### AgentFactory Interface
 
 ```python
-# backend/cdss/agents/factory.py
+# cdss/agents/factory.py
 
 class AgentFactory:
-    def __init__(
-        self,
-        registry: AgentRegistry,
-        bus: EventBus,
-        llm: LLMClient,
-        sources: SourceRegistry,
-    ): ...
+    def __init__(self, registry: AgentRegistry, bus: EventBus,
+                 llm: LLMClient, sources: SourceRegistry): ...
 
-    async def spawn(
-        self,
-        agent_type: AgentType,
-        task: AgentTask,
-        *,
-        parent_run_id: str | None = None,
-    ) -> AgentResult:
+    async def spawn(self, agent_type: AgentType, task: AgentTask,
+                    *, parent_run_id: str | None = None) -> AgentResult:
         """
         1. Generate run_id
-        2. Emit AgentSpawned event (with parent_run_id for tree)
+        2. Emit AgentSpawned (with parent_run_id for tree)
         3. Instantiate agent from registry
         4. Emit AgentStarted
         5. await agent.run(task, run_context)
@@ -420,21 +323,7 @@ class AgentFactory:
         """
 ```
 
-### SourceReaderAgent (core leaf agent)
-
-**Input:** `SourceReaderTask`
-- `question: str` — the user's research question
-- `condition: str`
-- `stage: str`
-- `source: SourceRef` — `{ url, title, site_id, rank }`
-
-**Steps:**
-1. `fetcher.fetch(url)` → raw bytes
-2. `extractor.extract(raw)` → plain text
-3. `llm.chat(SOURCE_READER_PROMPT)` → relevant summary only
-4. Return `SourceSummary { source, excerpt, confidence }`
-
-**Prompt rule:** Summarize ONLY information relevant to the patient's condition/stage/question. Do not invent doses or recommendations.
+Full agent contract: [contracts/agents.md](specs/001-cdss-multi-agent-pipeline/contracts/agents.md).
 
 ---
 
@@ -446,145 +335,82 @@ class AgentFactory:
 intake → research → trials → cross_indication → synthesize → END
 ```
 
+`cross_indication` is skipped when PrimeKG is unavailable; the run still completes.
+
 ### Research Phase (internal spawn tree)
 
 ```
 ResearchCoordinatorAgent
-│
-├─ search_site_scoped("{condition} {stage} standard of care")
-│     → [url_1, url_2, url_3, url_4, url_5]
-│
-├─ asyncio.gather(
-│     SourceReaderAgent(url_1),   ← parallel
-│     SourceReaderAgent(url_2),
-│     SourceReaderAgent(url_3),
-│     SourceReaderAgent(url_4),
-│     SourceReaderAgent(url_5),
-│   )
-│
-└─ ResearchAggregatorAgent
-      → standard_care_summary + source_summaries[]
+├─ search_site_scoped("{condition} {stage} standard of care") → [url_1 … url_5]
+├─ asyncio.gather(SourceReaderAgent(url_1) … (url_5))   ← parallel, bounded
+└─ ResearchAggregatorAgent → standard_care_summary + source_summaries[]
 ```
 
 ### Mapping from Colab Notebook
 
-| Notebook Cell | New Backend Module |
-|---------------|-------------------|
-| Cell 6 — PDF upload to Qdrant | `knowledge/vector/ingest.py` (optional fallback) |
-| Cell 7 — PrimeKG load | `knowledge/graph/loader.py` |
+| Notebook Cell | New Module |
+|---------------|-----------|
+| Cell 6 — state model | `core/models/` + `pipeline/state.py` |
+| Cell 8 — LLM setup | `llm/client.py`, `llm/model_selector.py`, `llm/json_utils.py` |
+| Cell 6 — PDF→Qdrant (optional) | `knowledge/vector/ingest.py` |
+| Cells 14/16 — PrimeKG load + BFS | `knowledge/graph/{loader,queries}.py` |
+| Cell 22 — Clinical Trials | `integrations/clinical_trials.py` |
 | Agent 1 — Intake | `agents/intake/intake_agent.py` |
-| Agent 2 — Standard Care (Qdrant RAG) | `agents/research/*` (web search + source readers) |
+| Agent 2 — Standard Care | `agents/research/*` (web search + source readers) |
 | Agent 3 — Clinical Trials | `agents/trials/trials_agent.py` |
 | Agent 4 — Cross-Indication | `agents/cross_indication/*` |
 | Agent 5 — Synthesizer | `agents/synthesis/report_agent.py` |
-| Cell 14 — LangGraph compile | `pipeline/workflow.py` |
-| Cell 15–17 — Run + display | Backend `pipeline/runner.py` + Frontend `app/main.py` |
+| Cell 28 — LangGraph compile | `pipeline/workflow.py` |
+| Cells 30–34 — Run + display | `pipeline/runner.py` (core) + `app/runner_bridge.py` + `app/main.py` (UI) |
 
 ---
 
-## 8. Backend API Specification
+## 8. Runner Bridge Interface
 
-### `POST /api/v1/runs`
+The single seam between UI and core (replaces the old REST API). See full contract in
+[contracts/runner.md](specs/001-cdss-multi-agent-pipeline/contracts/runner.md).
 
-Start a new research pipeline run.
+### Core entry (`cdss/pipeline/runner.py`)
 
-**Request:**
-```json
-{
-  "message": "I am a 54-year-old with stage III NSCLC, EGFR exon 19 deletion...",
-  "options": {
-    "include_trials": true,
-    "include_cross_indication": true,
-    "max_sources": 5
-  }
-}
+```python
+def build_runner(settings: Settings) -> Runner: ...
+
+class Runner:
+    async def run(self, raw_input: str, *, is_pdf: bool = False,
+                  options: RunOptions | None = None) -> FinalReport: ...
 ```
 
-**Response `202 Accepted`:**
-```json
-{
-  "run_id": "run_abc123",
-  "status": "running",
-  "events_url": "/api/v1/runs/run_abc123/events",
-  "status_url": "/api/v1/runs/run_abc123"
-}
+### UI bridge (`app/runner_bridge.py`)
+
+```python
+def start_run(text: str, files: list | None = None) -> RunHandle: ...
+
+class RunHandle:
+    run_id: str
+    def drain_events(self) -> list[AgentEvent]: ...   # thread-safe, non-blocking
+    def done(self) -> bool: ...
+    def result(self) -> FinalReport | None: ...
+    def report_stream(self) -> Iterator[str]: ...     # optional token stream
+    def error(self) -> Exception | None: ...
 ```
 
-### `GET /api/v1/runs/{run_id}`
-
-Poll run status and retrieve final report when complete.
-
-**Response (running):**
-```json
-{
-  "run_id": "run_abc123",
-  "status": "running",
-  "phase": "research",
-  "started_at": "2026-06-20T10:00:00Z"
-}
-```
-
-**Response (completed):**
-```json
-{
-  "run_id": "run_abc123",
-  "status": "completed",
-  "phase": "done",
-  "started_at": "2026-06-20T10:00:00Z",
-  "completed_at": "2026-06-20T10:00:45Z",
-  "report": {
-    "markdown": "# Patient Research Report\n...",
-    "profile": { "condition": "NSCLC", "stage": "III", "biomarkers": [...] },
-    "sources": [{ "url": "https://...", "title": "..." }],
-    "trials_count": 4,
-    "hypotheses_count": 3
-  },
-  "validation_flags": []
-}
-```
-
-### `GET /api/v1/runs/{run_id}/events`
-
-Server-Sent Events stream of agent activity.
-
-**Event format:**
-```
-event: agent_spawned
-data: {"run_id":"evt_001","parent_run_id":"run_abc123","agent_type":"SOURCE_READER","label":"Reading nccn.org/...","timestamp":"..."}
-
-event: agent_completed
-data: {"run_id":"evt_001","agent_type":"SOURCE_READER","duration_ms":4200,"timestamp":"..."}
-
-event: run_completed
-data: {"run_id":"run_abc123","status":"completed","timestamp":"..."}
-```
-
-### `GET /api/v1/health`
-
-```json
-{ "status": "ok", "version": "0.1.0" }
-```
+`start_run` validates input, generates a `run_id`, and launches `Runner.run()` on a
+**background thread** so the Streamlit script stays responsive. That thread runs only
+core code and pushes events to a thread-safe queue — it never calls `st.*` (it has no
+`ScriptRunContext`). A failed source never aborts the run; `done()` still becomes true
+with a partial report.
 
 ---
 
-## 9. Frontend (Streamlit) Specification
+## 9. Chat UI (Streamlit) Specification
 
-### Entry Point
+### Entry point
 
 ```bash
-# Terminal 1 — backend
-cd backend && uvicorn cdss.main:app --reload --port 8000
-
-# Terminal 2 — frontend
-cd frontend && streamlit run app/main.py --server.port 8501
+streamlit run app/main.py        # single process
 ```
 
-Environment variable for frontend:
-```
-CDSS_API_URL=http://localhost:8000
-```
-
-### UI Layout
+### Layout
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐
@@ -592,60 +418,46 @@ CDSS_API_URL=http://localhost:8000
 ├─────────────────────────────┬────────────────────────────────────┤
 │  CHAT                       │  AGENT ACTIVITY                    │
 │  ─────────────────────────  │  ────────────────────────────────  │
-│                             │                                    │
-│  User:                      │  ▶ IntakeAgent              ✓ 2s  │
-│  Stage III NSCLC, EGFR...   │  ▶ ResearchCoordinator      ✓ 0.4s │
-│                             │    ├─ SourceReader nccn.org ✓ 4s  │
-│  Assistant:                 │    ├─ SourceReader esmo.org ✓ 3s  │
-│  [Report rendered below]    │    ├─ SourceReader cancer.gov ✓ 5s│
-│                             │    └─ SourceReader nice.org.uk ✗   │
-│  ┌───────────────────────┐  │  ▶ ResearchAggregator       ✓ 1s  │
-│  │ Type your message...  │  │  ▶ TrialsAgent              ✓ 2s  │
-│  └───────────────────────┘  │  ▶ CrossIndicationCoord     ● ... │
-│  [Send]                     │  ○ ReportSynthesizer               │
-├─────────────────────────────┴────────────────────────────────────┤
-│  REPORT TABS:  Profile | Standard Care | Trials | Off-Label     │
-└──────────────────────────────────────────────────────────────────┘
+│  User: Stage III NSCLC…     │  ▶ IntakeAgent              ✓ 2s  │
+│                             │  ▶ ResearchCoordinator      ✓ 0.4s │
+│  Assistant:                 │    ├─ SourceReader nccn.org ✓ 4s  │
+│  [Report tabs below]        │    ├─ SourceReader esmo.org ✓ 3s  │
+│   Profile│Care│Trials│Off…  │    └─ SourceReader nice.org  ✗     │
+│  ┌───────────────────────┐  │  ▶ TrialsAgent              ● …   │
+│  │ Describe your case… 📎│  │  ○ ReportSynthesizer               │
+│  └───────────────────────┘  │                                    │
+└─────────────────────────────┴────────────────────────────────────┘
 ```
 
-### Frontend API Client (only backend touchpoint)
+### Key patterns
 
 ```python
-# frontend/app/api_client/client.py
+# One input for text + PDF (US1 + US5) — PDF bytes go to the core, not parsed in the UI
+prompt = st.chat_input("Describe your diagnosis…", accept_file=True, file_type=["pdf"])
+if prompt:
+    st.session_state.run_id = runner_bridge.start_run(prompt.text, prompt.files)
+    st.rerun()
 
-class CDSSApiClient:
-    def __init__(self, base_url: str):
-        self.base_url = base_url.rstrip("/")
+# Non-blocking trace refresh — drain the in-process event queue each tick
+@st.fragment(run_every="0.7s")
+def live_trace(handle):
+    st.session_state.events.extend(handle.drain_events())
+    agent_trace.render(st.session_state.events)        # st.status tree
+    if handle.done():
+        st.session_state.run_status = "completed"
+        st.rerun()                                     # exit fragment → render report
 
-    def start_run(self, message: str, options: dict | None = None) -> StartRunResponse:
-        """POST /api/v1/runs"""
-
-    def get_run(self, run_id: str) -> RunStatusResponse:
-        """GET /api/v1/runs/{run_id}"""
-
-    def stream_events(self, run_id: str) -> Iterator[AgentEvent]:
-        """GET /api/v1/runs/{run_id}/events — SSE parser"""
-
-    def health(self) -> bool:
-        """GET /api/v1/health"""
+# Report streamed into a chat message, sectioned by tabs, disclaimer always present
+with st.chat_message("assistant", avatar=":material/clinical_notes:"):
+    profile, care, trials, offlabel = st.tabs(["Profile","Standard Care","Trials","Off-Label"])
+    with care:
+        st.write_stream(handle.report_stream())        # or st.markdown(report.markdown)
+    st.caption(DISCLAIMER)
 ```
 
-### Frontend Run Loop (in `main.py`)
-
-```python
-# Pseudocode — frontend only orchestrates UI, not agents
-
-if user_submits_message:
-    response = api_client.start_run(message)
-    st.session_state.current_run_id = response.run_id
-    st.session_state.events = []
-
-# Background: consume SSE, append to st.session_state.events, st.rerun()
-
-if run_complete:
-    result = api_client.get_run(run_id)
-    display_report(result.report.markdown)
-```
+Other UI elements: suggestion chips before the first message, `@st.cache_resource` to
+build the runner (Groq client / factory / KG) once per session, a "New case" reset
+button, and optional `st.feedback("thumbs")`. The background thread never calls `st.*`.
 
 ---
 
@@ -654,7 +466,7 @@ if run_complete:
 ### `.env.example`
 
 ```bash
-# ── Backend only (never in frontend) ──
+# Secrets live in the app environment, read only by the core — never in app/ UI code.
 GROQ_API_KEY=gsk_...
 SERPER_API_KEY=...
 CLINICAL_TRIALS_BASE_URL=https://clinicaltrials.gov/api/v2/studies
@@ -663,36 +475,17 @@ CLINICAL_TRIALS_BASE_URL=https://clinicaltrials.gov/api/v2/studies
 QDRANT_URL=http://localhost:6333
 PRIMEKG_CACHE_DIR=/tmp/primekg
 LOG_LEVEL=INFO
-CORS_ORIGINS=http://localhost:8501
-
-# ── Frontend only ──
-CDSS_API_URL=http://localhost:8000
 ```
 
-### `backend/cdss/config/sources.yaml`
+### `cdss/config/sources.yaml`
 
 ```yaml
 sites:
-  - id: nccn
-    domain: nccn.org
-    priority: 1
-    enabled: true
-  - id: esmo
-    domain: esmo.org
-    priority: 1
-    enabled: true
-  - id: nci
-    domain: cancer.gov
-    priority: 2
-    enabled: true
-  - id: nice
-    domain: nice.org.uk
-    priority: 2
-    enabled: true
-  - id: asco
-    domain: asco.org
-    priority: 3
-    enabled: false          # toggle without code change
+  - { id: nccn, domain: nccn.org,     priority: 1, enabled: true }
+  - { id: esmo, domain: esmo.org,     priority: 1, enabled: true }
+  - { id: nci,  domain: cancer.gov,   priority: 2, enabled: true }
+  - { id: nice, domain: nice.org.uk,  priority: 2, enabled: true }
+  - { id: asco, domain: asco.org,     priority: 3, enabled: false }   # toggle, no code change
 
 search:
   provider: serper          # serper | tavily | google_cse
@@ -735,17 +528,20 @@ llm:
 | `RUN_COMPLETED` | Full pipeline done | `run_id`, `total_duration_ms` |
 | `RUN_FAILED` | Unrecoverable error | `run_id`, `error` |
 
+Events carry no secrets or raw patient text (PII-redacted). The UI builds the trace
+tree from `parent_run_id`; `agent_trace.py` maps status to `st.status` state. Full
+event contract: [contracts/events.md](specs/001-cdss-multi-agent-pipeline/contracts/events.md).
+
 ### Trace Tree Example
 
 ```
 run_abc123                          RUN_STARTED
 ├── agent_intake_001                INTAKE           2.1s ✓
 ├── agent_research_coord_002        RESEARCH_COORD   0.4s ✓
-│   ├── agent_reader_003            SOURCE_READER    4.2s ✓  nccn.org/...
-│   ├── agent_reader_004            SOURCE_READER    3.8s ✓  esmo.org/...
-│   ├── agent_reader_005            SOURCE_READER    5.1s ✓  cancer.gov/...
+│   ├── agent_reader_003            SOURCE_READER    4.2s ✓  nccn.org/…
+│   ├── agent_reader_004            SOURCE_READER    3.8s ✓  esmo.org/…
 │   ├── agent_reader_006            SOURCE_READER    15s  ✗  timeout
-│   └── agent_reader_007            SOURCE_READER    3.5s ✓  asco.org/...
+│   └── agent_reader_007            SOURCE_READER    3.5s ✓  asco.org/…
 ├── agent_research_agg_008          RESEARCH_AGG     1.2s ✓
 ├── agent_trials_009                TRIALS           2.0s ✓
 ├── agent_cross_coord_010           CROSS_IND_COORD  6.3s ✓
@@ -757,36 +553,35 @@ run_abc123                          RUN_STARTED
 
 ## 12. Data Models
 
+Pure-domain Pydantic v2 models in `cdss/core/models/`; LangGraph state in
+`cdss/pipeline/state.py`. The UI consumes these directly through `runner_bridge` — there
+is no separate wire-DTO layer. Full detail:
+[data-model.md](specs/001-cdss-multi-agent-pipeline/data-model.md).
+
 ### PipelineState (LangGraph shared state)
 
 ```python
 class PipelineState(BaseModel):
-    # run metadata
     run_id: str
     raw_input: str
-
+    input_is_pdf: bool = False
     # intake (Agent 1)
     condition: str = ""
     stage: str = ""
     biomarkers: list[Biomarker] = []
     current_medications: list[str] = []
     prior_therapies: list[str] = []
-
-    # research (Agent 2 — new shape)
+    # research (Agent 2)
     source_summaries: list[SourceSummary] = []
     standard_care_summary: str = ""
-
     # trials (Agent 3)
     clinical_trials: list[ClinicalTrial] = []
-
     # cross-indication (Agent 4)
     off_label_hypotheses: list[OffLabelHypothesis] = []
-
     # synthesis (Agent 5)
     validation_flags: list[str] = []
     final_report: str = ""
-
-    # control
+    # control (notebook retry rule)
     retry_count: int = 0
     max_retries: int = 2
 ```
@@ -806,75 +601,57 @@ class SourceSummary(BaseModel):
 
 ## 13. Implementation Phases
 
-### Phase 0 — Scaffold (Week 1)
+Detailed, dependency-ordered tasks live in
+[tasks.md](specs/001-cdss-multi-agent-pipeline/tasks.md). Summary:
 
-- [ ] Create directory structure (backend + frontend)
-- [ ] `pyproject.toml` / `requirements.txt` for both
-- [ ] FastAPI health endpoint
-- [ ] Streamlit shell with API client stub
-- [ ] Docker Compose (backend + frontend)
-- [ ] Verify frontend cannot import backend package
+### Phase 0 — Setup
+- [ ] Single-app skeleton (`cdss/` + `app/` + `tests/`)
+- [ ] `pyproject.toml` / `requirements.txt` (streamlit + core deps; no fastapi/uvicorn)
+- [ ] CI gates: file-size, import-direction (`cdss/` ⊬ `streamlit`), comment-length
+- [ ] Dockerfile (`streamlit run app/main.py`) + compose (app + optional qdrant)
 
-### Phase 1 — Core Infrastructure (Week 1–2)
+### Phase 1 — Foundational
+- [ ] `core/models`, `config/settings`, `observability/` (events, bus, trace store)
+- [ ] `llm/client.py` + runtime model selection
+- [ ] `AgentFactory` + `AgentRegistry` + event emission, with unit tests
 
-- [ ] `core/models`, `config/settings`, `observability/events`
-- [ ] `llm/client.py` with Groq model selection
-- [ ] `sources/search/site_scoped.py` + `sources/fetch/httpx_fetcher.py`
-- [ ] `AgentFactory` + `AgentRegistry` + event emission
-- [ ] Unit tests for factory and event bus
+### Phase 2 — US1 + US2 (P1 MVP)
+- [ ] `sources/` adapters; Intake, SourceReader, Coordinator, Aggregator, Synthesizer
+- [ ] `pipeline/runner.py` + `app/runner_bridge.py` (non-blocking run)
+- [ ] Chat UI: disclaimer, chat input, report tabs, live `st.status` trace via fragment
 
-### Phase 2 — Source Reader Pipeline (Week 2)
+### Phase 3 — US3 / US4 / US5
+- [ ] Trials agent (CT.gov); Cross-indication + PrimeKG (graceful skip); PDF upload via chat
 
-- [ ] `SourceReaderAgent` (leaf)
-- [ ] `ResearchCoordinatorAgent` (spawn N readers in parallel)
-- [ ] `ResearchAggregatorAgent`
-- [ ] `POST /runs` + SSE events endpoint
-- [ ] Frontend: chat input + live agent trace panel
-
-### Phase 3 — Port Remaining Notebook Agents (Week 3)
-
-- [ ] `IntakeAgent` (from notebook Agent 1)
-- [ ] `TrialsAgent` (from notebook Agent 3)
-- [ ] `CrossIndicationCoordinator` + KG (from notebook Agent 4)
-- [ ] `ReportSynthesizerAgent` (from notebook Agent 5)
-- [ ] LangGraph workflow wiring
-- [ ] Frontend: full report tabs
-
-### Phase 4 — Polish & Harden (Week 4)
-
-- [ ] Retry logic (from notebook `should_retry`)
-- [ ] Source caching (avoid re-fetching same URL)
-- [ ] Rate limiting on API
-- [ ] Error handling + partial results (some sources fail, others succeed)
-- [ ] Integration tests end-to-end
-- [ ] PrimeKG optional loader
-- [ ] Qdrant PDF fallback (optional)
+### Phase 4 — Polish
+- [ ] `st.cache_resource` runner, "New case", feedback; source caching; rate/size limits
+- [ ] Full end-to-end integration test with partial source failures
 
 ---
 
 ## 14. Testing Strategy
 
-### Backend
+### Core (`cdss/`)
 
 | Layer | What to test | How |
 |-------|-------------|-----|
 | `core/models` | Validation, serialization | Unit |
-| `sources/search` | Query building, result parsing | Unit with mocked HTTP |
-| `sources/fetch` | Timeout, extraction | Unit with fixture HTML |
-| `agents/source_reader` | Prompt → summary | Unit with mocked LLM |
+| `sources/*` | Query building, fetch timeout, extraction | Unit, mocked HTTP |
+| `agents/source_reader` | Prompt → summary | Unit, mocked LLM |
 | `agents/factory` | Spawn events, parent/child tree | Unit |
-| `pipeline/workflow` | Full run with all mocks | Integration |
-| `api/runs` | POST + GET + SSE | Integration with TestClient |
+| `pipeline/runner` | Full run, retry rule, partial failures | Integration, all mocks |
+| `observability/event_bus` | Publish/drain, ordering, cross-thread | Unit |
 
-### Frontend
+### UI (`app/`)
 
 | Layer | What to test | How |
 |-------|-------------|-----|
-| `api_client` | Request building, response parsing | Unit with mocked responses |
-| `components/agent_trace` | Tree rendering from event list | Unit with fixture events |
+| `runner_bridge` | start/drain/done/result against a fake runner | Unit |
+| `components/agent_trace` | Tree rendering from event list (incl. failed node) | `st.testing.AppTest` |
 | `state/session` | State initialization | Unit |
 
-**Rule:** Frontend tests never start the backend. Backend tests never import Streamlit.
+**Rule:** Core tests never import `streamlit`; UI tests never run real agents (they stub
+`runner_bridge`). No test hits a live external service or the free Groq quota.
 
 ---
 
@@ -883,58 +660,51 @@ class SourceSummary(BaseModel):
 ### Development
 
 ```
-localhost:8501  →  Streamlit (frontend)
-localhost:8000  →  Uvicorn (backend)
+streamlit run app/main.py   →  http://localhost:8501  (single process)
 ```
 
 ### Production (Docker Compose)
 
 ```yaml
 services:
-  backend:
-    build: ./backend
-    ports: ["8000:8000"]
+  app:
+    build: .
+    command: streamlit run app/main.py --server.port 8501 --server.address 0.0.0.0
+    ports: ["8501:8501"]
     env_file: .env
     volumes:
       - primekg_cache:/tmp/primekg
 
-  frontend:
-    build: ./frontend
-    ports: ["8501:8501"]
-    environment:
-      CDSS_API_URL: http://backend:8000
-    depends_on: [backend]
-
-  qdrant:          # optional
+  qdrant:          # optional, for uploaded-PDF vectors
     image: qdrant/qdrant
     ports: ["6333:6333"]
 ```
 
-### Future: Replace Streamlit
+### Future: swap or extend the UI
 
-Because the frontend is API-only, swapping Streamlit for React/Next.js requires:
-1. Implement the same `CDSSApiClient` in TypeScript
-2. Build UI components equivalent to `chat`, `agent_trace`, `report_view`
-3. Zero backend changes
+Because the UI talks to the core only through `runner_bridge`, you can replace Streamlit
+or add an API later by writing a new bridge over the same `Runner` — zero core changes.
 
 ---
 
 ## Appendix A — Makefile Targets
 
 ```makefile
-.PHONY: dev dev-backend dev-frontend test lint docker-up
+.PHONY: run test lint guards docker-up
 
-dev-backend:
-	cd backend && uvicorn cdss.main:app --reload --port 8000
-
-dev-frontend:
-	cd frontend && streamlit run app/main.py --server.port 8501
-
-dev:
-	@echo "Run 'make dev-backend' and 'make dev-frontend' in separate terminals"
+run:
+	streamlit run app/main.py
 
 test:
-	pytest tests/backend tests/frontend -v
+	pytest tests/core tests/app -v
+
+lint:
+	ruff check . && black --check .
+
+guards:                       # constitution gates
+	python scripts/check_file_size.py cdss app          # ≤400 lines
+	! grep -rqE '^\s*import streamlit|from streamlit' cdss/   # core ⊬ streamlit
+	python scripts/check_comment_length.py cdss app     # ≤2 sentences
 
 docker-up:
 	docker compose up --build
@@ -953,26 +723,18 @@ Every report and the Streamlit UI must display:
 
 ---
 
-## Appendix C — Frontend/Backend Import Guard
+## Appendix C — Import-Direction Guard
 
-Add to `frontend/app/main.py` at startup (dev-only assertion):
-
-```python
-FORBIDDEN_PREFIXES = ("cdss", "backend", "langgraph", "openai", "qdrant_client")
-import sys
-for mod in sys.modules:
-    for prefix in FORBIDDEN_PREFIXES:
-        if mod.startswith(prefix):
-            raise RuntimeError(f"Frontend must not import backend module: {mod}")
-```
-
-Add to CI:
+The core must stay headless. Enforce in CI that `cdss/` never imports `streamlit`:
 
 ```bash
-# Ensure frontend requirements contain no backend deps
-! grep -iE "langgraph|openai|qdrant|fastapi|uvicorn" frontend/requirements.txt
+# Fails the build if the core depends on the UI framework (Constitution II)
+! grep -rnE '^\s*(import streamlit|from streamlit)' cdss/
 ```
+
+Optionally assert in `app/` startup that no agent/LLM module is imported outside
+`runner_bridge`, so UI code cannot bypass the bridge.
 
 ---
 
-*Document version: 0.1.0 — 2026-06-20*
+*Document version: 1.0.0 — 2026-06-21 — aligned with Constitution v2.0.0 (Streamlit-only).*
