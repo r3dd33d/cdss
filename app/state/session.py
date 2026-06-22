@@ -8,7 +8,6 @@ def init() -> None:
         "run_handle": None,
         "run_status": "idle",   # idle | running | completed | failed
         "events": [],
-        "report": None,
         "last_report": None,
     }
     for key, val in defaults.items():
@@ -22,5 +21,4 @@ def reset() -> None:
     st.session_state.run_handle = None
     st.session_state.run_status = "idle"
     st.session_state.events = []
-    st.session_state.report = None
     st.session_state.last_report = None
