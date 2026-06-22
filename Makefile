@@ -1,18 +1,24 @@
-.PHONY: run test lint guards docker-up
+VENV := .venv
+PYTHON := $(VENV)/bin/python
 
-run:
-	python -m streamlit run app/main.py
+.PHONY: setup run test lint guards docker-up
 
-test:
-	pytest tests/ -v
+setup:
+	./scripts/setup.sh
 
-lint:
-	ruff check cdss app tests && black --check cdss app tests
+run: setup
+	./scripts/run.sh
 
-guards:
-	python scripts/check_file_size.py cdss app
-	python scripts/check_import_direction.py cdss
-	python scripts/check_comment_length.py cdss app
+test: setup
+	$(PYTHON) -m pytest tests/ -v
+
+lint: setup
+	$(VENV)/bin/ruff check cdss app tests && $(VENV)/bin/black --check cdss app tests
+
+guards: setup
+	$(PYTHON) scripts/check_file_size.py cdss app
+	$(PYTHON) scripts/check_import_direction.py cdss
+	$(PYTHON) scripts/check_comment_length.py cdss app
 
 docker-up:
 	docker compose up --build

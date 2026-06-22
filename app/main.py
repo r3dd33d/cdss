@@ -1,4 +1,12 @@
 import sys
+
+if sys.version_info < (3, 11):
+    raise SystemExit(
+        "CDSS requires Python 3.11+, but this interpreter is "
+        f"{sys.version.split()[0]}.\n"
+        "Run from the project venv: ./run  or  make run"
+    )
+
 from pathlib import Path
 
 _ROOT = Path(__file__).resolve().parents[1]

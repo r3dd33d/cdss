@@ -8,14 +8,18 @@ off-label hypotheses → plain-English report, with a live agent-trace panel.
 
 ## Quickstart
 
+Requires **Python 3.11+**. All commands below use the project `.venv` only.
+
 ```bash
 cp .env.example .env        # fill GROQ_API_KEY and SERPER_API_KEY
-python -m venv .venv && . .venv/bin/activate
-pip install -r requirements.txt
-streamlit run app/main.py
+make setup                  # create .venv + install dependencies
+./run                       # or: make run
 ```
 
 Open http://localhost:8501, describe a diagnosis, watch agents work.
+
+> Do **not** run bare `streamlit run` — macOS may pick a system Python 3.9.
+> Always use `./run`, `make run`, or `.venv/bin/python -m streamlit run app/main.py`.
 
 ## Architecture
 
@@ -28,10 +32,11 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) and [specs/](specs/) for full design docs
 ## Commands
 
 ```bash
-make run      # streamlit run app/main.py
-make test     # pytest tests/
-make lint     # ruff + black
-make guards   # file-size · import-direction · comment-length gates
+make setup    # create .venv + pip install (first time)
+make run      # ./scripts/run.sh → venv streamlit only
+make test     # venv pytest
+make lint     # venv ruff + black
+make guards   # venv guard scripts
 ```
 
 ## Disclaimer
