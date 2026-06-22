@@ -211,7 +211,9 @@ cdss-ds/                                 # project root (single Streamlit app)
 │   │   ├── registry.py                  # AgentType → class map
 │   │   ├── intake/                      # intake_agent.py
 │   │   ├── research/                    # coordinator, source_reader, aggregator
-│   │   ├── trials/                      # trials_agent.py
+│   │   ├── trials/                      # coordinator, trial_reader, aggregator
+│   │   ├── router/                      # router_agent (pre-pipeline)
+│   │   └── chat/                        # chat_agent (pre-pipeline)
 │   │   ├── cross_indication/            # coordinator, kg_traversal, hypothesis
 │   │   └── synthesis/                   # report_agent.py
 │   │
@@ -332,7 +334,7 @@ Full agent contract: [contracts/agents.md](specs/001-cdss-multi-agent-pipeline/c
 ### LangGraph Top-Level (sequential phases)
 
 ```
-intake → research → trials → cross_indication → synthesize → END
+intake → research → trials_read → cross_indication → synthesize → END
 ```
 
 `cross_indication` is skipped when PrimeKG is unavailable; the run still completes.
@@ -357,7 +359,7 @@ ResearchCoordinatorAgent
 | Cell 22 — Clinical Trials | `integrations/clinical_trials.py` |
 | Agent 1 — Intake | `agents/intake/intake_agent.py` |
 | Agent 2 — Standard Care | `agents/research/*` (web search + source readers) |
-| Agent 3 — Clinical Trials | `agents/trials/trials_agent.py` |
+| Agent 3 — Clinical Trials | `agents/trials/coordinator_agent.py`, `trial_reader_agent.py`, `aggregator_agent.py` |
 | Agent 4 — Cross-Indication | `agents/cross_indication/*` |
 | Agent 5 — Synthesizer | `agents/synthesis/report_agent.py` |
 | Cell 28 — LangGraph compile | `pipeline/workflow.py` |

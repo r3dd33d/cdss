@@ -31,6 +31,11 @@ fetch:
   max_content_chars: 12000
   user_agent: "CDSS-ResearchBot/0.1"
 
+trials:
+  max_readers: 5
+  max_search_results: 10
+  rank_recruiting_boost: 2
+
 llm:
   provider: groq
   max_tokens_intake: 1024

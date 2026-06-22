@@ -12,6 +12,7 @@ _STUDY = {
         "descriptionModule": {"briefSummary": "A trial for NSCLC patients."},
         "designModule": {"phases": ["PHASE3"]},
         "contactsLocationsModule": {"locations": [{"facility": {"name": "Mayo Clinic"}}]},
+        "conditionsModule": {"keywords": ["NSCLC", "EGFR"]},
     }
 }
 
@@ -21,6 +22,7 @@ def test_parse_valid_study():
     assert isinstance(trial, ClinicalTrial)
     assert trial.nct_id == "NCT001"
     assert "clinicaltrials.gov" in trial.url
+    assert "NSCLC" in trial.keywords
 
 
 def test_parse_bad_study_returns_none():

@@ -22,10 +22,15 @@ def render(report: FinalReport) -> None:
         st.markdown(report.markdown)
 
     with tabs[2]:
-        if report.trials_count == 0:
+        matched = report.trials_matched_count
+        analyzed = report.trials_analyzed_count
+        if matched == 0:
             st.info("No matching trials found.")
         else:
-            st.markdown(f"{report.trials_count} trials included in the report above.")
+            st.markdown(
+                f"**{matched} trial(s) matched** in search; "
+                f"**{analyzed} analyzed** in depth (see report above)."
+            )
 
     with tabs[3]:
         if report.hypotheses_count == 0:

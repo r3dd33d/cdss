@@ -37,11 +37,19 @@ class LLMConfig:
 
 
 @dataclass(frozen=True)
+class TrialsConfig:
+    max_readers: int
+    max_search_results: int
+    rank_recruiting_boost: int
+
+
+@dataclass(frozen=True)
 class SourceRegistry:
     sites: list[SiteConfig]
     search: SearchConfig
     fetch: FetchConfig
     llm: LLMConfig
+    trials: TrialsConfig
 
     @property
     def enabled_sites(self) -> list[SiteConfig]:
@@ -54,4 +62,10 @@ def load_registry(yaml_path: Path) -> SourceRegistry:
     search = SearchConfig(**raw["search"])
     fetch = FetchConfig(**raw["fetch"])
     llm = LLMConfig(**raw["llm"])
-    return SourceRegistry(sites=sites, search=search, fetch=fetch, llm=llm)
+    trials_raw = raw.get("trials", {})
+    trials = TrialsConfig(
+        max_readers=trials_raw.get("max_readers", 5),
+        max_search_results=trials_raw.get("max_search_results", 10),
+        rank_recruiting_boost=trials_raw.get("rank_recruiting_boost", 2),
+    )
+    return SourceRegistry(sites=sites, search=search, fetch=fetch, llm=llm, trials=trials)

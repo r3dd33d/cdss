@@ -2,6 +2,7 @@ import logging
 
 from curl_cffi.requests import AsyncSession
 
+from cdss.core.models.patient import PatientProfile
 from cdss.core.models.trial import ClinicalTrial
 
 logger = logging.getLogger(__name__)
@@ -29,7 +30,6 @@ async def fetch_trials(
         "format": "json",
     }
     try:
-        # httpx/requests get 403 from ClinicalTrials.gov CDN (TLS fingerprinting).
         async with AsyncSession() as client:
             resp = await client.get(
                 base_url,
@@ -46,6 +46,83 @@ async def fetch_trials(
         return [], f"Trials API error: {exc}"
 
 
+async def fetch_study(nct_id: str, base_url: str = _BASE) -> dict | None:
+    """Fetch a single study record by NCT id."""
+    try:
+        async with AsyncSession() as client:
+            resp = await client.get(
+                f"{base_url}/{nct_id}",
+                params={"format": "json"},
+                impersonate="chrome",
+                timeout=20,
+            )
+            resp.raise_for_status()
+        return resp.json()
+    except Exception as exc:
+        logger.warning("fetch_study failed for %s: %s", nct_id, exc)
+        return None
+
+
+def study_text(study: dict, *, max_chars: int = 12000) -> str:
+    """Extract eligibility and intervention text for LLM summarization."""
+    proto = study.get("protocolSection", study)
+    parts: list[str] = []
+    id_mod = proto.get("identificationModule", {})
+    parts.append(f"NCT: {id_mod.get('nctId', '')}\nTitle: {id_mod.get('briefTitle', '')}")
+
+    desc = proto.get("descriptionModule", {})
+    if desc.get("briefSummary"):
+        parts.append(f"BRIEF SUMMARY:\n{desc['briefSummary']}")
+    if desc.get("detailedDescription"):
+        parts.append(f"DETAILED DESCRIPTION:\n{desc['detailedDescription'][:4000]}")
+
+    elig = proto.get("eligibilityModule", {})
+    if elig.get("eligibilityCriteria"):
+        parts.append(f"ELIGIBILITY CRITERIA:\n{elig['eligibilityCriteria'][:6000]}")
+
+    arms = proto.get("armsInterventionsModule", {})
+    interventions = arms.get("interventions", [])
+    if interventions:
+        lines = [f"- {i.get('name', '')}: {i.get('description', '')}" for i in interventions]
+        parts.append("INTERVENTIONS:\n" + "\n".join(lines))
+
+    text = "\n\n".join(parts)
+    return text[:max_chars]
+
+
+def rank_trials(
+    trials: list[ClinicalTrial],
+    profile: PatientProfile,
+    *,
+    limit: int = 5,
+    recruiting_boost: int = 2,
+) -> list[ClinicalTrial]:
+    """Heuristic rank: recruiting status, phase, biomarker/condition overlap."""
+    genes = [b.gene.upper() for b in profile.biomarkers if b.gene]
+    cond_tokens = {t for t in profile.condition.lower().split() if len(t) > 3}
+
+    def score(trial: ClinicalTrial) -> int:
+        s = 0
+        if trial.status == "RECRUITING":
+            s += recruiting_boost
+        phase_upper = trial.phase.upper()
+        if "PHASE3" in phase_upper:
+            s += 2
+        elif "PHASE2" in phase_upper:
+            s += 1
+        blob = (trial.title + " " + " ".join(trial.keywords)).upper()
+        for gene in genes:
+            if gene in blob:
+                s += 2
+        title_lower = trial.title.lower()
+        if any(tok in title_lower for tok in cond_tokens):
+            s += 1
+        return s
+
+    ranked = sorted(trials, key=score, reverse=True)
+    return ranked[:limit]
+
+
 def _parse(study: dict) -> ClinicalTrial | None:
     try:
         proto = study["protocolSection"]
@@ -53,8 +130,13 @@ def _parse(study: dict) -> ClinicalTrial | None:
         status_mod = proto["statusModule"]
         desc_mod = proto.get("descriptionModule", {})
         design_mod = proto.get("designModule", {})
+        cond_mod = proto.get("conditionsModule", {})
+        keywords = list(cond_mod.get("keywords") or [])
 
-        locations = [_facility_name(loc) for loc in proto.get("contactsLocationsModule", {}).get("locations", [])[:3]]
+        locations = [
+            _facility_name(loc)
+            for loc in proto.get("contactsLocationsModule", {}).get("locations", [])[:3]
+        ]
         nct_id = id_mod.get("nctId", "")
         return ClinicalTrial(
             nct_id=nct_id,
@@ -64,6 +146,7 @@ def _parse(study: dict) -> ClinicalTrial | None:
             locations=[loc for loc in locations if loc],
             eligibility_summary=desc_mod.get("briefSummary", "")[:500],
             url=f"https://clinicaltrials.gov/study/{nct_id}",
+            keywords=keywords,
         )
     except (KeyError, TypeError, AttributeError):
         return None

@@ -12,7 +12,7 @@ plain-English patient research report in Markdown.
 Include these sections in order:
 1. ## Patient Profile
 2. ## Standard of Care
-3. ## Clinical Trials ({trials_count} found)
+3. ## Clinical Trials ({trials_matched_count} matched; {trials_analyzed_count} analyzed)
 4. ## Off-Label Hypotheses ({hypotheses_count} found)
 5. ## Important Disclaimer
 
@@ -21,7 +21,7 @@ For section 5 use EXACTLY this text:
 
 Patient Profile: {profile}
 Standard Care Summary: {standard_care}
-Clinical Trials: {trials}
+Clinical Trials (aggregated deep-read): {trials_aggregated}
 Off-Label Hypotheses: {hypotheses}
 Validation Flags: {flags}
 """

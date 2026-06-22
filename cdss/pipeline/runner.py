@@ -9,7 +9,9 @@ from cdss.agents.research.coordinator_agent import ResearchCoordinatorAgent
 from cdss.agents.research.source_reader_agent import SourceReaderAgent
 from cdss.agents.synthesis.report_agent import ReportSynthesizerAgent
 from cdss.agents.cross_indication.coordinator_agent import CrossIndicationCoordinator
-from cdss.agents.trials.trials_agent import TrialsAgent
+from cdss.agents.trials.coordinator_agent import TrialsCoordinatorAgent
+from cdss.agents.trials.trial_reader_agent import TrialReaderAgent
+from cdss.agents.trials.aggregator_agent import TrialAggregatorAgent
 from cdss.config.settings import Settings
 from cdss.core.enums import AgentType, EventType
 from cdss.core.models.report import FinalReport
@@ -53,14 +55,16 @@ class Runner:
         reg.register(AgentType.INTAKE, IntakeAgent)
         reg.register(AgentType.SOURCE_READER, SourceReaderAgent)
         reg.register(AgentType.RESEARCH_AGGREGATOR, ResearchAggregatorAgent)
-        reg.register(AgentType.TRIALS, TrialsAgent)
+        reg.register(AgentType.TRIAL_READER, TrialReaderAgent)
+        reg.register(AgentType.TRIAL_AGGREGATOR, TrialAggregatorAgent)
         reg.register(AgentType.CROSS_INDICATION_COORD, CrossIndicationCoordinator)
         reg.register(AgentType.REPORT_SYNTHESIZER, ReportSynthesizerAgent)
         factory = AgentFactory(reg, self.bus, **deps)
 
-        # Give coordinator access to the factory for spawning readers.
         reg.register(AgentType.RESEARCH_COORDINATOR,
                      lambda **kw: ResearchCoordinatorAgent(**kw, factory=factory))
+        reg.register(AgentType.TRIALS_COORDINATOR,
+                     lambda **kw: TrialsCoordinatorAgent(**kw, factory=factory))
         return factory
 
     async def run(self, raw_input: str, *, is_pdf: bool = False) -> FinalReport:
@@ -74,13 +78,13 @@ class Runner:
         try:
             result = await graph.ainvoke(state)
             final_state = PipelineState.model_validate(result)
-            from cdss.llm.prompts.synthesizer import DISCLAIMER
-            from cdss.core.models.patient import PatientProfile
             report = FinalReport(
                 markdown=final_state.final_report,
                 profile=final_state._profile(),
                 sources=[s.source for s in final_state.source_summaries],
-                trials_count=len(final_state.clinical_trials),
+                trials_count=len(final_state.trial_summaries),
+                trials_matched_count=final_state.trials_matched_count,
+                trials_analyzed_count=len(final_state.trial_summaries),
                 hypotheses_count=len(final_state.off_label_hypotheses),
                 validation_flags=final_state.validation_flags,
             )

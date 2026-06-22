@@ -9,5 +9,7 @@ class FinalReport(BaseModel):
     profile: PatientProfile
     sources: list[SourceRef] = Field(default_factory=list)
     trials_count: int = 0
+    trials_matched_count: int = 0
+    trials_analyzed_count: int = 0
     hypotheses_count: int = 0
     validation_flags: list[str] = Field(default_factory=list)

@@ -9,6 +9,7 @@ def init() -> None:
         "run_status": "idle",   # idle | running | completed | failed
         "events": [],
         "report": None,
+        "last_report": None,
     }
     for key, val in defaults.items():
         if key not in st.session_state:
@@ -22,3 +23,4 @@ def reset() -> None:
     st.session_state.run_status = "idle"
     st.session_state.events = []
     st.session_state.report = None
+    st.session_state.last_report = None

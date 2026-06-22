@@ -8,15 +8,19 @@ from cdss.llm.prompts.synthesizer import DISCLAIMER
 from cdss.observability.run_context import RunContext
 
 
-def _task() -> SynthesizerTask:
-    return SynthesizerTask(
+def _task(**kwargs) -> SynthesizerTask:
+    defaults = dict(
         profile=PatientProfile(condition="NSCLC", stage="III"),
         standard_care="Osimertinib is standard first-line.",
         source_summaries=[],
-        trials=[],
+        trials_aggregated="**10 matched; 3 analyzed.**\nEligibility excerpts here.",
+        trials_matched_count=10,
+        trials_analyzed_count=3,
         hypotheses=[],
         validation_flags=[],
     )
+    defaults.update(kwargs)
+    return SynthesizerTask(**defaults)
 
 
 @pytest.mark.asyncio
@@ -45,3 +49,14 @@ async def test_report_profile_preserved():
     agent = ReportSynthesizerAgent(llm=llm)
     result = await agent.run(_task(), RunContext(run_id="r1"))
     assert result.data.profile.condition == "NSCLC"
+
+
+@pytest.mark.asyncio
+async def test_synthesizer_prompt_includes_matched_and_analyzed_counts():
+    llm = MagicMock()
+    llm.chat.return_value = f"Report.\n\n{DISCLAIMER}"
+    agent = ReportSynthesizerAgent(llm=llm)
+    await agent.run(_task(), RunContext(run_id="r1"))
+    prompt = llm.chat.call_args[0][0]
+    assert "10" in prompt and "3" in prompt
+    assert "aggregated" in prompt.lower() or "Eligibility" in prompt

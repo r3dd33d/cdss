@@ -2,7 +2,7 @@ from pydantic import BaseModel, Field
 
 from cdss.core.models.patient import PatientProfile, Biomarker
 from cdss.core.models.source import SourceSummary
-from cdss.core.models.trial import ClinicalTrial
+from cdss.core.models.trial import ClinicalTrial, TrialSummary
 from cdss.core.models.hypothesis import OffLabelHypothesis
 
 
@@ -22,8 +22,11 @@ class PipelineState(BaseModel):
     source_summaries: list[SourceSummary] = Field(default_factory=list)
     standard_care_summary: str = ""
 
-    # Populated by TrialsAgent
+    # Populated by trials deep-read phase
     clinical_trials: list[ClinicalTrial] = Field(default_factory=list)
+    trial_summaries: list[TrialSummary] = Field(default_factory=list)
+    trials_matched_count: int = 0
+    trials_aggregated: str = ""
 
     # Populated by CrossIndicationCoordinator
     off_label_hypotheses: list[OffLabelHypothesis] = Field(default_factory=list)

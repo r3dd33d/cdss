@@ -15,6 +15,7 @@ if str(_ROOT) not in sys.path:
 
 import streamlit as st
 
+from app.chat_bridge import route_and_reply
 from app.components import agent_trace, disclaimer, feedback, report_view, suggestions
 from app.runner_bridge import RunHandle, start_run
 from app.state.session import init, reset
@@ -48,6 +49,7 @@ def _render_sidebar_trace(handle: RunHandle | None) -> None:
                 st.session_state.run_status = status
                 if handle.result():
                     st.session_state.report = handle.result()
+                    st.session_state.last_report = handle.result()
                     st.session_state.messages.append({
                         "role": "assistant",
                         "content": "",
@@ -67,18 +69,45 @@ def _render_sidebar_trace(handle: RunHandle | None) -> None:
         st.caption("Agent activity will appear here during a run.")
 
 
+def _start_research_run(text: str, files: list | None = None) -> None:
+    """Start the pipeline without appending the user message (caller handles that)."""
+    runner = _get_runner()
+    handle: RunHandle = start_run(runner, text, files)
+    st.session_state.run_handle = handle
+    st.session_state.run_status = "running"
+    st.rerun()
+
+
 def _submit_message(text: str, files: list | None = None) -> None:
-    """Append user message and start the pipeline."""
+    """Append user message and start the pipeline (research path)."""
     try:
-        runner = _get_runner()
-        handle: RunHandle = start_run(runner, text, files)
-        st.session_state.run_handle = handle
-        st.session_state.run_status = "running"
         user_content = text if text.strip() else ":material/attach_file: PDF uploaded"
         st.session_state.messages.append({"role": "user", "content": user_content})
-        st.rerun()
+        _start_research_run(text, files)
     except ValueError as exc:
         st.error(str(exc))
+
+
+def _handle_chat_input(text: str, files: list | None) -> None:
+    """Route message: chat/clarify reply inline, or start research pipeline."""
+    prior = st.session_state.get("last_report")
+    # PDF upload always forces full research pipeline.
+    if files:
+        _submit_message(text, files)
+        return
+
+    decision, reply = route_and_reply(
+        text,
+        has_prior_report=prior is not None,
+        prior_report=prior,
+    )
+    st.session_state.messages.append({"role": "user", "content": text})
+
+    if decision.mode == "research":
+        _start_research_run(text, None)
+    else:
+        st.session_state.messages.append({"role": "assistant", "content": reply or ""})
+        st.rerun()
 
 
 init()
@@ -117,4 +146,4 @@ if prompt and st.session_state.run_status == "idle":
     text = prompt.text or ""
     files = prompt.files or []
     if text.strip() or files:
-        _submit_message(text, files or None)
+        _handle_chat_input(text, files or None)

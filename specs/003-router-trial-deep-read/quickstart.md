@@ -43,11 +43,14 @@ make test
 .venv/bin/python -m pytest tests/core/integration/test_trials_read_pipeline.py -v
 ```
 
+## Manual checks
+
+1. **Chat path**: Ask "What is HER2?" — quick educational reply, no sidebar agent trace.
+2. **Research path**: Use a suggestion pill or describe a case — full pipeline including trial deep-read.
+3. **Trials tab**: After a research run, Trials tab shows matched vs analyzed counts.
+
 ## Already done on this branch
 
 - `fetch_trials()` + `curl_cffi` (task T006a)
 - Suggestion pills start the pipeline
-
-## Implementation order
-
-See [tasks.md](./tasks.md) — start with Phase 1 (router + chat), then trial deep-read.
+- Router + ChatAgent + trial deep-read pipeline (feature 003)
