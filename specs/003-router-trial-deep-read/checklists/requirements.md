@@ -9,6 +9,7 @@
 - [x] Contracts for router and trials-read
 - [x] Tasks phased by user story
 - [x] Spec analyze remediation applied (2026-06-22)
+- [x] Spec analyze 2nd-pass fixes applied (2026-06-22)
 - [ ] Implementation started
 - [ ] All tasks complete
 - [ ] ARCHITECTURE.md updated

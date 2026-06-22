@@ -16,7 +16,7 @@ research_subgraph:
   intake → research (existing) → trials_read → cross_indication → synthesize
 ```
 
-`node_trials_read` wraps one coordinator that performs search, rank, and fan-out internally (no separate LangGraph node for search-only).
+`node_trials_read` replaces `node_trials` and mirrors `node_research`: one LangGraph node that (1) spawns **TrialsCoordinatorAgent** (search, rank, fan-out readers), then (2) spawns **TrialAggregatorAgent** on the returned summaries. No separate graph node for the aggregator.
 
 ## Technical Context
 
@@ -81,17 +81,17 @@ cdss/
 │   └── registry.py                  # parse trials config block
 ├── pipeline/
 │   ├── workflow.py                  # replace trials edge with trials_read node
-│   ├── nodes.py                     # node_trials_read (+ intake-order guard)
+│   ├── nodes.py                     # node_trials_read: coordinator → aggregator (like node_research)
 │   └── state.py                     # trial_summaries, trials_matched_count, trials_aggregated
 app/
 ├── main.py                          # route before _submit_message; chat_reply branch
-└── runner_bridge.py                 # optional: chat_reply() helper if needed
+└── chat_bridge.py                   # sync wrappers: route_and_reply() via asyncio.run()
 
 tests/
 ├── core/unit/agents/test_router.py
 ├── core/unit/agents/test_trials_coordinator.py
 ├── core/unit/integrations/test_clinical_trials_rank.py
-├── core/integration/test_trials_read_pipeline.py   # SC-003, FR-002
+├── core/integration/test_trials_read_pipeline.py   # FR-002, SC-002, SC-003
 └── app/unit/test_chat_latency.py                 # SC-001 smoke
 ```
 

@@ -27,7 +27,7 @@ Patients should be able to ask educational questions without triggering a 60-sec
 
 | Area | Path |
 |------|------|
-| UI submit | `app/main.py` → `route_message()` → `_submit_message()` or `chat_reply()` |
+| UI submit | `app/main.py` → `app/chat_bridge.py` → `_submit_message()` or chat reply |
 | Graph | `cdss/pipeline/workflow.py`, `nodes.py` — replace `node_trials` with `node_trials_read` |
 | Trials API | `cdss/integrations/clinical_trials.py` — add `fetch_study`, `rank_trials`, `keywords` in `_parse` |
 | Parallel pattern | `cdss/agents/research/coordinator_agent.py` |

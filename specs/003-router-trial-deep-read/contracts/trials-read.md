@@ -57,7 +57,12 @@ class TrialsCoordinatorAgent:
         #    validation_flags: search errors + per-reader failures
 ```
 
-Invoked from single LangGraph node `node_trials_read` (after intake populated `condition`).
+Invoked from single LangGraph node `node_trials_read` (after intake populated `condition`):
+
+1. `factory.spawn(TRIALS_COORDINATOR, …)` → `trial_summaries`, `clinical_trials`, `trials_matched_count`, flags
+2. `factory.spawn(TRIAL_AGGREGATOR, …)` → `trials_aggregated`
+
+Same two-step pattern as `node_research` (coordinator → aggregator).
 
 ## Reader spawn rule
 

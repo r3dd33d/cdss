@@ -26,6 +26,17 @@ async def chat_reply(
 
 Implemented in `cdss/agents/chat/chat_agent.py`. **Not** spawned via `AgentFactory`.
 
+## Sync bridge (Streamlit)
+
+`app/chat_bridge.py` exposes synchronous helpers for the UI thread:
+
+```python
+def route_and_reply(text: str, *, has_prior_report: bool = False, prior_report=None) -> tuple[RouteDecision, str | None]:
+    """asyncio.run(route_message); if mode==chat, also returns chat_reply text."""
+```
+
+`app/main.py` MUST NOT call `asyncio` directly — use `chat_bridge` only.
+
 ## Modes
 
 | Mode | Behavior |

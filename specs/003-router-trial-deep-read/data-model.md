@@ -4,6 +4,8 @@
 
 ### RouteDecision
 
+Defined in `cdss/core/models/route.py` (imported by router and UI bridge).
+
 | Field | Type | Description |
 |-------|------|-------------|
 | `mode` | `"chat" \| "research" \| "clarify"` | Routing outcome |
@@ -71,6 +73,15 @@ TRIAL_AGGREGATOR
 | `TrialAggregatorAgent` (new) | `list[TrialSummary]` | `trials_aggregated` |
 
 Unified `DocumentAggregator` deferred to v2 (see spec non-goals).
+
+## LangGraph node: `node_trials_read`
+
+Mirrors `node_research` — one node, two factory spawns:
+
+```python
+# 1. TrialsCoordinatorAgent → trial_summaries, clinical_trials, trials_matched_count
+# 2. TrialAggregatorAgent     → trials_aggregated
+```
 
 ## Event Trace Shape
 

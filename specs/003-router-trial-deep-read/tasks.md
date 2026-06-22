@@ -5,9 +5,9 @@
 
 ## Phase 1 — Router & Chat (US1)
 
-- [ ] T001 [P] [US1] Add `RouteDecision` model and `RouterAgent` in `cdss/agents/router/router_agent.py`
+- [ ] T001 [P] [US1] Add `RouteDecision` in `cdss/core/models/route.py` and `RouterAgent` in `cdss/agents/router/router_agent.py`
 - [ ] T002 [US1] Add `ChatAgent` + prompt in `cdss/agents/chat/chat_agent.py` (educational, disclaimer; **not** in `app/`)
-- [ ] T003 [US1] Wire router in `app/main.py`: `route_message()` before `_submit_message()`; `chat_reply()` branch; pills/PDF force research
+- [ ] T003 [US1] Add `app/chat_bridge.py` sync helpers (`asyncio.run` for `route_message` / `chat_reply`); wire in `app/main.py` before `_submit_message()`; pills/PDF force research
 - [ ] T004 [US1] Unit tests `tests/core/unit/agents/test_router.py` with mocked LLM classifications
 - [ ] T005 [US1] AppTest or manual checklist: chat message does not spawn sidebar agent trace
 - [ ] T024 [P] [US1] [SC-001] Chat latency smoke `tests/app/unit/test_chat_latency.py` — mocked LLM, assert no `Runner.run`, completes &lt; 5 s wall clock
@@ -34,23 +34,26 @@
 
 - [ ] T010 [US2] Add `TrialReaderAgent` — `fetch_study`, build prompt from eligibility + interventions, LLM summarize
 - [ ] T011 [US2] Add `TrialsCoordinatorAgent` — search, rank, `asyncio.gather` readers; **append validation_flag per failed reader (NCT id + error)**
+- [ ] T016 [US3] Add `TrialAggregatorAgent` — merge `TrialSummary` list into markdown; note gaps when readers failed
 - [ ] T012 [US2] Register `TRIALS_COORDINATOR`, `TRIAL_READER`, `TRIAL_AGGREGATOR` in `AgentType`, `runner._make_factory()`
-- [ ] T013 [US2] Replace `node_trials` with `node_trials_read` in `workflow.py` / `nodes.py`; assert `state.condition` non-empty (FR-002 guard)
+- [ ] T013 [US2] Replace `node_trials` with `node_trials_read` in `workflow.py` / `nodes.py` — spawn coordinator **then** aggregator (mirror `node_research`); FR-002 guard: skip/empty when `state.condition` blank
 - [ ] T014 [US2] Extend `PipelineState` with `trial_summaries`, `trials_matched_count`, `trials_aggregated`
-- [ ] T015 [US2] Unit tests `tests/core/unit/agents/test_trials_coordinator.py` — 10 hits → 5 spawns, 3 hits → 3 spawns, 1 failure → flag + partial summaries
-- [ ] T025 [P] [US2] [SC-004] Trace test: mocked run emits `TRIAL_READER` spawn events as children of `TRIALS_COORDINATOR` in event bus
-- [ ] T026 [US2] [FR-002] Integration test `tests/core/integration/test_trials_read_pipeline.py` — trials node skipped / empty when intake returns no condition
+- [ ] T015 [US2] [SC-002] Unit tests `tests/core/unit/agents/test_trials_coordinator.py` — 10 hits → 5 spawns, 3 hits → 3 spawns, 1 failure → flag + partial summaries
+- [ ] T025 [P] [US2] [SC-004] Trace test: mocked run emits `TRIAL_READER` children under `TRIALS_COORDINATOR`, then `TRIAL_AGGREGATOR` spawn, in event bus
+- [ ] T026 [US2] [FR-002, SC-002, SC-003] Integration `tests/core/integration/test_trials_read_pipeline.py`:
+  - empty condition after intake → no trial readers
+  - 10 mocked hits → ≤5 readers, partial failure tolerated
+  - report markdown references eligibility / matched-vs-analyzed counts
 
-**Checkpoint**: Integration test with mocked CT.gov — report includes eligibility excerpts.
+**Checkpoint**: Integration test — report includes eligibility excerpts and "N matched; M analyzed" copy.
 
 ---
 
-## Phase 4 — Aggregation & synthesizer (US3)
+## Phase 4 — Synthesizer & UI (US3)
 
-- [ ] T016 [US3] Add `TrialAggregatorAgent` — merge `TrialSummary` list into markdown section (separate from `ResearchAggregatorAgent`)
-- [ ] T017 [US3] Update `SynthesizerTask` / `ReportSynthesizerAgent` to use `trials_aggregated` + matched count
+- [ ] T017 [US3] Update `SynthesizerTask` / `ReportSynthesizerAgent` to use `trials_aggregated` + `trials_matched_count` (not raw trial JSON)
 - [ ] T018 [US3] Update `report_view.py` Trials tab to show analyzed count vs matched count
-- [ ] T019 [US3] Unit test synthesizer receives aggregated text, not raw JSON
+- [ ] T019 [US3] [SC-002] Unit test synthesizer: receives aggregated text; prompt/body includes matched count and analyzed count when they differ
 
 **Checkpoint**: Full research run — trials section discusses eligibility fit.
 
@@ -71,8 +74,8 @@
 T001 → T003 → T005, T024
 T006a (done) → T006 → T006b → T007
 T008 → T008b → T011
-T006b, T007, T009 → T010 → T011 → T013 → T015, T025, T026
-T016 → T017 → T019
+T006b, T007, T009 → T010 → T011 → T016 → T012 → T013 → T015, T025, T026
+T013, T014 → T017 → T019
 T020 → T021
 ```
 

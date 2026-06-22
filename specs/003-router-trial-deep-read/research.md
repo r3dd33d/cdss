@@ -87,9 +87,9 @@ Spawn count = `len(ranked)` where `len(ranked) <= MAX_READERS`.
 
 ## Decision 9: LangGraph node shape
 
-**Decision**: Single `node_trials_read` wrapping `TrialsCoordinatorAgent` (search + rank + fan-out inside coordinator). No separate `trials_search` graph node.
+**Decision**: Single `node_trials_read` LangGraph node that spawns **TrialsCoordinatorAgent** then **TrialAggregatorAgent** — same pattern as `node_research` (coordinator → aggregator in one node). Coordinator performs search, rank, and reader fan-out internally.
 
-**Rationale**: Matches research phase (coordinator owns discovery + fan-out); fewer graph edges.
+**Rationale**: Matches research phase wiring; trace shows both agents without extra graph edges.
 
 ## Decision 10: Factory scope (FR-007)
 

@@ -61,7 +61,7 @@ The **ReportSynthesizer** receives both pre-aggregated strings plus counts, not 
 
 **Acceptance Scenarios**:
 
-1. **Given** partial reader failures, **When** aggregation runs, **Then** each aggregator uses only successful summaries and notes gaps.
+1. **Given** partial trial reader failures, **When** `TrialAggregatorAgent` runs, **Then** it uses only successful trial summaries and notes gaps. *(ResearchAggregator behavior for failed `SourceReader`s is unchanged from feature 001.)*
 2. **Given** completed aggregation, **When** the synthesizer runs, **Then** it receives pre-aggregated trial and guideline text, not raw API JSON.
 
 ---
