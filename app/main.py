@@ -67,6 +67,20 @@ def _render_sidebar_trace(handle: RunHandle | None) -> None:
         st.caption("Agent activity will appear here during a run.")
 
 
+def _submit_message(text: str, files: list | None = None) -> None:
+    """Append user message and start the pipeline."""
+    try:
+        runner = _get_runner()
+        handle: RunHandle = start_run(runner, text, files)
+        st.session_state.run_handle = handle
+        st.session_state.run_status = "running"
+        user_content = text if text.strip() else ":material/attach_file: PDF uploaded"
+        st.session_state.messages.append({"role": "user", "content": user_content})
+        st.rerun()
+    except ValueError as exc:
+        st.error(str(exc))
+
+
 init()
 disclaimer.render()
 
@@ -91,8 +105,7 @@ for msg in st.session_state.messages:
 if not st.session_state.messages and st.session_state.run_status == "idle":
     chosen = suggestions.render()
     if chosen:
-        st.session_state.messages.append({"role": "user", "content": chosen})
-        st.rerun()
+        _submit_message(chosen)
 
 prompt = st.chat_input(
     "Describe your diagnosis or upload a test-result PDF…",
@@ -103,13 +116,5 @@ prompt = st.chat_input(
 if prompt and st.session_state.run_status == "idle":
     text = prompt.text or ""
     files = prompt.files or []
-    try:
-        runner = _get_runner()
-        handle: RunHandle = start_run(runner, text, files or None)
-        st.session_state.run_handle = handle
-        st.session_state.run_status = "running"
-        user_content = text if text else ":material/attach_file: PDF uploaded"
-        st.session_state.messages.append({"role": "user", "content": user_content})
-        st.rerun()
-    except ValueError as exc:
-        st.error(str(exc))
+    if text.strip() or files:
+        _submit_message(text, files or None)

@@ -1,5 +1,5 @@
 import pytest
-from unittest.mock import AsyncMock, patch, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from cdss.integrations.clinical_trials import fetch_trials, _parse
 from cdss.core.models.trial import ClinicalTrial
@@ -33,14 +33,35 @@ async def test_fetch_trials_returns_list():
     mock_resp.json.return_value = {"studies": [_STUDY]}
     mock_resp.raise_for_status = MagicMock()
 
-    with patch("httpx.AsyncClient.get", new_callable=AsyncMock, return_value=mock_resp):
-        trials = await fetch_trials("NSCLC", ["EGFR"])
+    mock_session = MagicMock()
+    mock_session.get = AsyncMock(return_value=mock_resp)
+    mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+    mock_session.__aexit__ = AsyncMock(return_value=None)
+
+    with patch("cdss.integrations.clinical_trials.AsyncSession", return_value=mock_session):
+        trials, error = await fetch_trials("NSCLC", ["EGFR"])
+    assert error is None
     assert len(trials) == 1
     assert trials[0].nct_id == "NCT001"
 
 
 @pytest.mark.asyncio
 async def test_fetch_trials_degrades_on_error():
-    with patch("httpx.AsyncClient.get", side_effect=Exception("network error")):
-        trials = await fetch_trials("NSCLC", [])
+    mock_session = MagicMock()
+    mock_session.get = AsyncMock(side_effect=Exception("network error"))
+    mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+    mock_session.__aexit__ = AsyncMock(return_value=None)
+
+    with patch("cdss.integrations.clinical_trials.AsyncSession", return_value=mock_session):
+        trials, error = await fetch_trials("NSCLC", [])
     assert trials == []
+    assert error is not None
+    assert "Trials API error" in error
+
+
+@pytest.mark.asyncio
+async def test_fetch_trials_skips_without_condition():
+    trials, error = await fetch_trials("", [])
+    assert trials == []
+    assert error is not None
+    assert "no condition" in error.lower()

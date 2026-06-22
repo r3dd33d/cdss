@@ -43,7 +43,8 @@ async def node_research(state: PipelineState, *, factory) -> dict:
 async def node_trials(state: PipelineState, *, factory) -> dict:
     task = TrialsTask(profile=state._profile())
     result = await factory.spawn(AgentType.TRIALS, task, parent_run_id=state.run_id)
-    return dict(clinical_trials=result.data)
+    flags = list(state.validation_flags) + result.validation_flags
+    return dict(clinical_trials=result.data, validation_flags=flags)
 
 
 async def node_cross_indication(state: PipelineState, *, factory) -> dict:

@@ -16,9 +16,10 @@ class TrialsAgent(BaseAgent):
     async def run(self, task: AgentTask, ctx: RunContext) -> AgentResult:
         t: TrialsTask = task  # type: ignore[assignment]
         genes = [b.gene for b in t.profile.biomarkers]
-        trials = await fetch_trials(
+        trials, error = await fetch_trials(
             condition=t.profile.condition,
             biomarker_genes=genes,
             base_url=self._settings.clinical_trials_base_url,
         )
-        return AgentResult(run_id=ctx.run_id, data=trials)
+        flags = [error] if error else []
+        return AgentResult(run_id=ctx.run_id, data=trials, validation_flags=flags)

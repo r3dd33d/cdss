@@ -1,6 +1,10 @@
-import httpx
+import logging
+
+from curl_cffi.requests import AsyncSession
 
 from cdss.core.models.trial import ClinicalTrial
+
+logger = logging.getLogger(__name__)
 
 _BASE = "https://clinicaltrials.gov/api/v2/studies"
 
@@ -12,8 +16,11 @@ async def fetch_trials(
     biomarker_genes: list[str],
     base_url: str = _BASE,
     max_results: int = 10,
-) -> list[ClinicalTrial]:
+) -> tuple[list[ClinicalTrial], str | None]:
     """Query ClinicalTrials.gov v2 for active/recruiting trials."""
+    if not condition.strip():
+        return [], "Trials skipped: no condition extracted from intake."
+
     query_parts = [condition] + biomarker_genes
     params = {
         "query.cond": " ".join(query_parts),
@@ -22,13 +29,21 @@ async def fetch_trials(
         "format": "json",
     }
     try:
-        async with httpx.AsyncClient(timeout=20) as client:
-            resp = await client.get(base_url, params=params)
+        # httpx/requests get 403 from ClinicalTrials.gov CDN (TLS fingerprinting).
+        async with AsyncSession() as client:
+            resp = await client.get(
+                base_url,
+                params=params,
+                impersonate="chrome",
+                timeout=20,
+            )
             resp.raise_for_status()
         studies = resp.json().get("studies", [])
-        return [_parse(s) for s in studies if _parse(s) is not None]
-    except Exception:
-        return []  # graceful degradation per FR-005
+        trials = [t for s in studies if (t := _parse(s)) is not None]
+        return trials, None
+    except Exception as exc:
+        logger.warning("ClinicalTrials.gov fetch failed: %s", exc)
+        return [], f"Trials API error: {exc}"
 
 
 def _parse(study: dict) -> ClinicalTrial | None:
@@ -39,19 +54,23 @@ def _parse(study: dict) -> ClinicalTrial | None:
         desc_mod = proto.get("descriptionModule", {})
         design_mod = proto.get("designModule", {})
 
-        locations = [
-            loc.get("facility", {}).get("name", "")
-            for loc in proto.get("contactsLocationsModule", {}).get("locations", [])[:3]
-        ]
+        locations = [_facility_name(loc) for loc in proto.get("contactsLocationsModule", {}).get("locations", [])[:3]]
         nct_id = id_mod.get("nctId", "")
         return ClinicalTrial(
             nct_id=nct_id,
             title=id_mod.get("briefTitle", ""),
             phase=", ".join(design_mod.get("phases", ["N/A"])),
             status=status_mod.get("overallStatus", ""),
-            locations=[l for l in locations if l],
+            locations=[loc for loc in locations if loc],
             eligibility_summary=desc_mod.get("briefSummary", "")[:500],
             url=f"https://clinicaltrials.gov/study/{nct_id}",
         )
-    except (KeyError, TypeError):
+    except (KeyError, TypeError, AttributeError):
         return None
+
+
+def _facility_name(loc: dict) -> str:
+    facility = loc.get("facility", "")
+    if isinstance(facility, dict):
+        return facility.get("name", "")
+    return str(facility) if facility else ""
