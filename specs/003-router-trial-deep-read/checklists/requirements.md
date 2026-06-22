@@ -8,6 +8,7 @@
 - [x] Data model for new entities
 - [x] Contracts for router and trials-read
 - [x] Tasks phased by user story
+- [x] Spec analyze remediation applied (2026-06-22)
 - [ ] Implementation started
 - [ ] All tasks complete
 - [ ] ARCHITECTURE.md updated

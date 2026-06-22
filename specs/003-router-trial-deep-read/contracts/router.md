@@ -13,11 +13,24 @@ async def route_message(
     ...
 ```
 
+Implemented in `cdss/agents/router/router_agent.py`. **Not** spawned via `AgentFactory` (pre-pipeline; see FR-007).
+
+```python
+async def chat_reply(
+    text: str,
+    *,
+    prior_report: FinalReport | None = None,
+) -> str:
+    ...
+```
+
+Implemented in `cdss/agents/chat/chat_agent.py`. **Not** spawned via `AgentFactory`.
+
 ## Modes
 
 | Mode | Behavior |
 |------|----------|
-| `chat` | Return `ChatAgent` reply; no `Runner.run()` |
+| `chat` | Call `chat_reply()`; no `Runner.run()` |
 | `research` | Proceed to `_submit_message()` / pipeline |
 | `clarify` | Return assistant message with `clarifying_question`; no run |
 
@@ -34,9 +47,18 @@ async def route_message(
 - Patient case with condition/stage/biomarker → `research`
 - General oncology education → `chat`
 
+## Trace events (optional)
+
+UI MAY publish lightweight events before `RUN_STARTED`:
+- `route_decided` with `mode`
+- `chat_replied` when chat path taken
+
+Pipeline agents (intake onward) MUST use factory spawn per FR-007.
+
 ## Tests
 
 - `"What is HER2?"` → `chat`
 - `"Stage II HER2+ breast cancer, no treatment"` → `research`
 - `"help"` → `clarify`
 - Pill selection → `research` (UI override, not router)
+- SC-001: chat path wall clock &lt; 5 s with mocked LLM (T024)

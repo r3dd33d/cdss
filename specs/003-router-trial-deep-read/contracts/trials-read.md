@@ -14,7 +14,9 @@ async def fetch_trials(
     ...
 ```
 
-Returns metadata for **all** matches up to `max_results`.
+Returns metadata for **all** matches up to `max_results`. **Implemented** on branch (`0bbdce8`) with `curl_cffi`.
+
+`ClinicalTrial` includes `keywords: list[str]` from search `_parse()` for ranking.
 
 ## Per-study fetch
 
@@ -37,6 +39,8 @@ def rank_trials(
     ...
 ```
 
+Inputs: `title`, `status`, `phase`, `keywords` on each `ClinicalTrial` plus profile condition/biomarkers. Does **not** require per-study fetch.
+
 ## Coordinator fan-out
 
 ```python
@@ -50,7 +54,10 @@ class TrialsCoordinatorAgent:
         #      trial_summaries: successful_reads,
         #      trials_matched_count: len(all_matched),
         #    }
+        #    validation_flags: search errors + per-reader failures
 ```
+
+Invoked from single LangGraph node `node_trials_read` (after intake populated `condition`).
 
 ## Reader spawn rule
 
@@ -58,17 +65,22 @@ class TrialsCoordinatorAgent:
 N = min(len(ranked_trials), max_readers)   # max_readers default 5
 ```
 
+Separate from guideline `SourceReader` pool (`max_total_sources: 5`).
+
 If `len(ranked_trials) == 0`, spawn 0 readers.
 
 ## Failure semantics
 
 - Search error → `validation_flags`, empty trials, no readers
-- Reader error → `None` in gather results; excluded from summaries; flag optional per failure
-- Parse error on one study → skip that study; continue
+- Reader error → `None` in gather results; excluded from summaries; **MUST** append `validation_flags` entry: `"TrialReader failed for {nct_id}: {error}"`
+- Parse error on one study during read → skip that study; continue; append flag
 
 ## Synthesizer input
 
 Report synthesizer receives:
-- `trials_aggregated: str` (from TrialAggregator)
+- `standard_care` — from existing `ResearchAggregatorAgent`
+- `trials_aggregated: str` — from `TrialAggregatorAgent`
 - `trials_matched_count: int`
-- `trial_summaries: list[TrialSummary]` (for trace/debug)
+- `trial_summaries: list[TrialSummary]` (optional debug/trace)
+
+Not raw `ClinicalTrial` JSON blobs.

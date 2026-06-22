@@ -36,10 +36,17 @@ asyncio.run(main())
 
 ```bash
 make test
-# Focus:
-.venv/bin/python -m pytest tests/core/unit/agents/test_router.py -v
-.venv/bin/python -m pytest tests/core/unit/agents/test_trials_coordinator.py -v
+# Phase 1:
+.venv/bin/python -m pytest tests/core/unit/agents/test_router.py tests/app/unit/test_chat_latency.py -v
+# Phase 2–3:
+.venv/bin/python -m pytest tests/core/unit/integrations/test_clinical_trials_rank.py tests/core/unit/agents/test_trials_coordinator.py -v
+.venv/bin/python -m pytest tests/core/integration/test_trials_read_pipeline.py -v
 ```
+
+## Already done on this branch
+
+- `fetch_trials()` + `curl_cffi` (task T006a)
+- Suggestion pills start the pipeline
 
 ## Implementation order
 
